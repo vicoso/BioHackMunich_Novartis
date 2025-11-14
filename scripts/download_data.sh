@@ -10,8 +10,10 @@ DATA_DIR="$SCRIPT_DIR/../data"
 mkdir -p "$DATA_DIR"
 
 urls=(
-	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=TCM_Compounds_HEK293T_10_Counts.xlsx"
-	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=TCM_Compounds_HEK293T_10_MetaData.xlsx"
+	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_HEK293T_10%CE%BCM_Counts.xlsx"
+	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_HEK293T_10%CE%BCM_MetaData.xlsx"
+	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_MDA_MB_231_10%CE%BCM_Counts.xlsx"
+	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_MDA_MB_231_10%CE%BCM_MetaData.xlsx"
 )
 
 download_file() {
