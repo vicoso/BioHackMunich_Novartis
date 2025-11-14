@@ -2,6 +2,7 @@
 uv.lock
 data/
 notebooks/
+!src/data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
