@@ -11,7 +11,9 @@ This example demonstrates how to:
 
 import torch
 import numpy as np
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
+import pandas as pd
+import pickle
 
 # Import our modular components
 from src.config import (
@@ -38,37 +40,22 @@ def main():
     # =============================================================================
     # 1. Prepare example data
     # =============================================================================
-
     print("\n1. Preparing example molecular data...")
 
     # Example SMILES strings (replace with your actual data)
-    smiles_list = [
-        "CC(C)Cc1ccc(cc1)C(C)C(O)=O",  # Ibuprofen
-        "CC(=O)Oc1ccccc1C(=O)O",  # Aspirin
-        "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",  # Caffeine
-        "CCO",  # Ethanol
-        "C1=CC=CC=C1",  # Benzene
-        "CC(C)(C)C",  # Tert-butane
-        "CCCCCCCCCCCCCCCC(=O)O",  # Palmitic acid
-        "CC(=O)N",  # Acetamide
-    ]
+    with open("./data/X.pkl","rb") as f:
+        smiles_list = pickle.load(f)
+
 
     # Generate dummy gene expression data (978 genes for L1000)
     # In practice, replace this with your actual gene expression data
-    num_genes = 978
     num_samples = len(smiles_list)
 
     # Create realistic-looking gene expression changes
-    np.random.seed(42)
-    gene_expression_list = []
+    with open("./data/y.pkl","rb") as g:
+        gene_expression_list = pickle.load(g)
 
-    for i in range(num_samples):
-        # Simulate different expression patterns for different molecules
-        base_expression = np.random.normal(0, 0.5, num_genes)
-        # Add some structure - some genes are more affected
-        strong_genes = np.random.choice(num_genes, size=50, replace=False)
-        base_expression[strong_genes] += np.random.normal(0, 1.5, 50)
-        gene_expression_list.append(base_expression)
+    num_genes = len(gene_expression_list)
 
     print(
         f"Loaded {len(smiles_list)} molecules with {num_genes} gene expression values each"
@@ -127,7 +114,7 @@ def main():
     training_config = TrainingConfig(
         learning_rate=0.001,
         batch_size=2,
-        num_epochs=20,  # Fewer epochs for demonstration
+        num_epochs=100,  # Fewer epochs for demonstration
         patience=5,
         device=str(device),
     )
