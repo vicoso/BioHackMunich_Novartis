@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from torch_geometric.data import Data
 from rdkit import Chem
 from rdkit.Chem import Descriptors
@@ -8,6 +9,58 @@ from typing import List, Optional, Union, Sequence
 from ..utils.constants import PERMITTED_ATOMS, PERMITTED_BOND_TYPES
 
 # --- Feature Helpers ---
+
+
+def create_dataset(
+    smiles_list: List[str],
+    molecular_features: List[np.ndarray],
+    gene_expression_list: List[np.ndarray],
+    use_chirality: bool = True,
+    use_stereochemistry: bool = True,
+    add_explicit_hydrogens: bool = False,
+) -> List[Data]:
+    """
+    Create dataset from SMILES strings and gene expression values.
+
+    Args:
+        smiles_list: List of SMILES strings
+        molecular_features: List of molecular feature arrays
+        use_chirality: Whether to include chirality information
+        use_stereochemistry: Whether to include stereochemistry information
+        add_explicit_hydrogens: Whether to add explicit hydrogens
+
+    Returns:
+        List of PyTorch Geometric Data objects
+    """
+    dataset = []
+
+    for smiles, gene_expr, mol_feat in zip(
+        smiles_list, gene_expression_list, molecular_features
+    ):
+        try:
+            # Convert SMILES to graph
+            graph_data = smiles_to_graph(
+                smiles,
+                use_chirality=use_chirality,
+                use_stereochemistry=use_stereochemistry,
+                add_explicit_hydrogens=add_explicit_hydrogens,
+            )
+
+            # Add gene expression as target (1D per-sample -> stacks to [B, G])
+            graph_data.y = torch.tensor(gene_expr, dtype=torch.float)
+
+            # Attach additional molecular-level features (e.g., dose, platform)
+            if mol_feat is not None:
+                graph_data.mol_features = torch.tensor(
+                    mol_feat, dtype=torch.float
+                )
+
+            dataset.append(graph_data)
+        except Exception as e:
+            print(f"Error processing SMILES {smiles}: {e}")
+            continue
+
+    return dataset
 
 
 def get_atom_features(
