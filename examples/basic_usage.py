@@ -54,7 +54,17 @@ def main():
     with open("./data/y.pkl", "rb") as g:
         gene_expression_list = pickle.load(g)
 
+    # Validate consistency of gene vector lengths
     num_genes = len(gene_expression_list[0])
+    mismatched = [
+        i for i, y in enumerate(gene_expression_list) if len(y) != num_genes
+    ]
+    if mismatched:
+        raise ValueError(
+            f"Inconsistent gene vector lengths: expected {num_genes}, "
+            f"found mismatches at indices {mismatched[:10]}"
+            + ("..." if len(mismatched) > 10 else "")
+        )
 
     print(
         f"Loaded {len(smiles_list)} molecules with {num_genes} gene expression values each"

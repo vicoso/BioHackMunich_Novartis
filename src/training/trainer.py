@@ -49,8 +49,10 @@ def create_dataset(
                 add_explicit_hydrogens=add_explicit_hydrogens,
             )
 
-            # Add gene expression as target
-            graph_data.y = torch.tensor(gene_expr, dtype=torch.float)
+            # Add gene expression as target (shape [1, num_genes] so batches stack to [B, num_genes])
+            graph_data.y = torch.tensor(gene_expr, dtype=torch.float).unsqueeze(
+                0
+            )
 
             dataset.append(graph_data)
         except Exception as e:
@@ -87,15 +89,19 @@ def train_one_epoch(
     all_predictions = []
     all_targets = []
 
-    for batch in loader:
+    for batch_idx, batch in enumerate(loader):
         batch = batch.to(device)
         optimizer.zero_grad()
 
         # Forward pass
         pred = model(batch)
-        # Compute loss
 
-        loss = criterion(pred.view(-1), batch.y)
+        # One-line debug for the first batch each epoch
+        if batch_idx == 0:
+            print(f"Debug shapes -> pred: {pred.shape}, y: {batch.y.shape}")
+
+        # Compute loss (both should be [B, G])
+        loss = criterion(pred, batch.y)
 
         # Backward pass
         loss.backward()
