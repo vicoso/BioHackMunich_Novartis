@@ -5,14 +5,15 @@ Molecular feature extraction utilities for converting SMILES to graph representa
 import torch
 from torch_geometric.data import Data
 from rdkit import Chem
-from typing import List, Optional, Union
+from rdkit.Chem import Descriptors
+from typing import List, Optional, Union, Sequence
 
 from ..utils.constants import PERMITTED_ATOMS, PERMITTED_BOND_TYPES
 
 
 def get_atom_features(
     atom: Chem.rdchem.Atom, use_chirality: bool = True
-) -> List[Union[int, float]]:
+) -> Sequence[Union[int, float]]:
     """
     Convert RDKit atom object to feature vector.
 
@@ -51,7 +52,7 @@ def get_atom_features(
 
 def get_bond_features(
     bond: Chem.rdchem.Bond, use_stereochemistry: bool = True
-) -> List[Union[int, float]]:
+) -> Sequence[Union[int, float]]:
     """
     Convert RDKit bond object to feature vector.
 
@@ -193,16 +194,14 @@ def get_molecular_descriptors(smiles: str) -> dict:
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
 
-    from rdkit.Chem import Descriptors
-
     return {
-        "molecular_weight": Descriptors.MolWt(mol),
-        "logp": Descriptors.MolLogP(mol),
+        "molecular_weight": Descriptors.MolWt(mol),  # type: ignore
+        "logp": Descriptors.MolLogP(mol),  # type: ignore
         "num_atoms": mol.GetNumAtoms(),
         "num_bonds": mol.GetNumBonds(),
-        "num_rings": Descriptors.RingCount(mol),
-        "tpsa": Descriptors.TPSA(mol),
-        "num_rotatable_bonds": Descriptors.NumRotatableBonds(mol),
-        "num_h_donors": Descriptors.NumHDonors(mol),
-        "num_h_acceptors": Descriptors.NumHAcceptors(mol),
+        "num_rings": Descriptors.RingCount(mol),  # type: ignore
+        "tpsa": Descriptors.TPSA(mol),  # type: ignore
+        "num_rotatable_bonds": Descriptors.NumRotatableBonds(mol),  # type: ignore
+        "num_h_donors": Descriptors.NumHDonors(mol),  # type: ignore
+        "num_h_acceptors": Descriptors.NumHAcceptors(mol),  # type: ignore
     }
