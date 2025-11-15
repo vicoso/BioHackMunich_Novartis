@@ -4,7 +4,7 @@ method: bayes
 
 # Optimize the validation loss logged by Lightning as "val_loss"
 metric:
-  name: val_loss
+  name: val_rmse
   goal: minimize
 
 # Entrypoint for the sweep runs
@@ -33,7 +33,7 @@ parameters:
     values: [0.0001, 0.0005, 0.001]
   # Model (GNN)
   hidden-dim:
-    values: [64, 128, 256, 384]
+    values: [64, 128, 256]
   num-conv-layers:
     values: [2, 3, 4]
   dropout:
@@ -41,9 +41,9 @@ parameters:
     min: 0.0
     max: 0.5
   pooling:
-    values: [mean, add, max]
+    values: [mean, add]
   activation:
-    values: [relu, gelu, elu, leaky_relu, tanh]
+    values: [relu, tanh]
   use-batch-norm:
     values: [true, false]
 
