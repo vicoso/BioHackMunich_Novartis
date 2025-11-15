@@ -61,8 +61,9 @@ PERMITTED_BOND_TYPES: List[Chem.rdchem.BondType] = [
 ]
 
 # Default model parameters
+# Use computed ATOM_FEATURE_DIM to avoid drift from feature definition
 DEFAULT_MODEL_PARAMS = {
-    "node_feature_dim": 52,  # Based on get_atom_features output
+    "node_feature_dim": ATOM_FEATURE_DIM,
     "hidden_dim": 128,
     "num_conv_layers": 3,
     "num_genes": 978,  # L1000 landmark genes

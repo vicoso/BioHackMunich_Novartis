@@ -10,7 +10,9 @@ from typing import Optional
 class GNNConfig:
     """Configuration for GNN model architecture."""
 
-    node_feature_dim: int = 52
+    # Matches get_atom_features dimensionality: len(PERMITTED_ATOMS) + 7 properties + (1 if chirality)
+    # With current defaults, this evaluates to 51.
+    node_feature_dim: int = 51
     hidden_dim: int = 128
     num_conv_layers: int = 3
     num_genes: int = 978

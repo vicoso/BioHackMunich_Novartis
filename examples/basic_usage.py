@@ -18,6 +18,7 @@ from src.config import (
     GNNConfig,
     TrainingConfig,
 )
+from src.utils.constants import ATOM_FEATURE_DIM
 from src.models.gnn import MolecularGCN
 from src.training.trainer import (
     create_dataset,
@@ -116,7 +117,7 @@ def main():
 
     # Create model configuration
     model_config = GNNConfig(
-        node_feature_dim=52,  # Based on molecular features
+        node_feature_dim=ATOM_FEATURE_DIM,  # Align with actual atom feature size
         hidden_dim=64,  # Smaller for this example
         num_conv_layers=2,  # Fewer layers for faster training
         num_genes=num_genes,
@@ -208,8 +209,16 @@ def main():
                 graph_data = graph_data.to(device)
 
                 # Add batch dimension
+                assert (
+                    graph_data.x is not None
+                ), "Expected node features 'x' to be present"
+                n_nodes = (
+                    graph_data.num_nodes
+                    if graph_data.num_nodes is not None
+                    else graph_data.x.size(0)
+                )
                 graph_data.batch = torch.zeros(
-                    graph_data.x.size(0), dtype=torch.long, device=device
+                    n_nodes, dtype=torch.long, device=device
                 )
 
                 # Make prediction
@@ -243,10 +252,19 @@ def main():
     with torch.no_grad():
         example_graph = smiles_to_graph("CCO")  # Ethanol
         example_graph = example_graph.to(device)
+        n_nodes = (
+            example_graph.num_nodes
+            if example_graph.num_nodes is not None
+            else example_graph.x.size(0)
+        )
         example_graph.batch = torch.zeros(
-            example_graph.x.size(0), dtype=torch.long, device=device
+            n_nodes, dtype=torch.long, device=device
         )
 
+        # Ensure node features exist (they do for smiles_to_graph)
+        assert (
+            example_graph.x is not None
+        ), "Expected node features 'x' to be present"
         embeddings = model.get_embeddings(example_graph)
         print(f"Molecular embedding shape: {embeddings.shape}")
         print(f"Embedding sample: {embeddings[0, :5].cpu().numpy()}")
