@@ -20,5 +20,7 @@ dependencies = [
     "pandarallel>=1.6.5",
     "ipywidgets>=8.1.8",
     "pytorch-lightning>=2.4.0",
+    "torchmetrics>=1.0.0",
+    "wandb>=0.17.0",
     "black>=25.11.0",
 ]
