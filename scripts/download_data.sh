@@ -14,6 +14,7 @@ urls=(
 	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_HEK293T_10%CE%BCM_MetaData.xlsx"
 	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_MDA_MB_231_10%CE%BCM_Counts.xlsx"
 	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=MCE_Bioactive_Compounds_MDA_MB_231_10%CE%BCM_MetaData.xlsx"
+	"https://static-content.springer.com/esm/art%3A10.1038%2Fs41592-025-02781-5/MediaObjects/41592_2025_2781_MOESM3_ESM.xlsx"
 )
 
 download_file() {
