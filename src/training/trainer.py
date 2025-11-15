@@ -93,9 +93,9 @@ def train_one_epoch(
 
         # Forward pass
         pred = model(batch)
-
         # Compute loss
-        loss = criterion(pred, batch.y)
+
+        loss = criterion(pred.view(-1), batch.y)
 
         # Backward pass
         loss.backward()
