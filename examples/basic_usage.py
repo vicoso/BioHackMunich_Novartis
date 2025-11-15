@@ -144,122 +144,122 @@ def main():
     # 4. Train the model
     # =============================================================================
 
-    # print("\n4. Training the model...")
+    print("\n4. Training the model...")
 
-    # # Initialize optimizer and loss function
-    # optimizer = torch.optim.Adam(
-    #     model.parameters(), lr=training_config.learning_rate
-    # )
-    # criterion = torch.nn.MSELoss()
+    # Initialize optimizer and loss function
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=training_config.learning_rate
+    )
+    criterion = torch.nn.MSELoss()
 
-    # # Train model
-    # training_history = train_model(
-    #     model=model,
-    #     train_loader=train_loader,
-    #     val_loader=val_loader,
-    #     optimizer=optimizer,
-    #     criterion=criterion,
-    #     device=device,
-    #     num_epochs=training_config.num_epochs,
-    #     patience=training_config.patience,
-    #     save_best_model=True,
-    #     model_save_path="best_model.pth",
-    #     verbose=True,
-    # )
+    # Train model
+    training_history = train_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
+        device=device,
+        num_epochs=training_config.num_epochs,
+        patience=training_config.patience,
+        save_best_model=True,
+        model_save_path="best_model.pth",
+        verbose=True,
+    )
 
-    # print(f"Training completed at epoch {training_history['final_epoch']}")
-    # print(
-    #     f"Best validation loss: {min(training_history['val_losses']) if training_history['val_losses'] else 'N/A'}"
-    # )
+    print(f"Training completed at epoch {training_history['final_epoch']}")
+    print(
+        f"Best validation loss: {min(training_history['val_losses']) if training_history['val_losses'] else 'N/A'}"
+    )
 
     # # =============================================================================
     # # 5. Evaluate model performance
     # # =============================================================================
 
-    # print("\n5. Evaluating model performance...")
+    print("\n5. Evaluating model performance...")
 
-    # if val_loader:
-    #     val_metrics, val_predictions, val_targets = evaluate(
-    #         model, val_loader, criterion, device
-    #     )
+    if val_loader:
+        val_metrics, val_predictions, val_targets = evaluate(
+            model, val_loader, criterion, device
+        )
 
-    #     print("Validation Metrics:")
-    #     for metric, value in val_metrics.items():
-    #         print(f"  {metric}: {value:.4f}")
+        print("Validation Metrics:")
+        for metric, value in val_metrics.items():
+            print(f"  {metric}: {value:.4f}")
 
     # # =============================================================================
     # # 6. Make predictions on new molecules
     # # =============================================================================
 
-    # print("\n6. Making predictions on new molecules...")
+    print("\n6. Making predictions on new molecules...")
 
-    # # Example new molecules for prediction
-    # new_smiles = [
-    #     "CC(C)O",  # Isopropanol
-    #     "C1=CC=C(C=C1)O",  # Phenol
-    # ]
+    # Example new molecules for prediction
+    new_smiles = [
+        "CC(C)O",  # Isopropanol
+        "C1=CC=C(C=C1)O",  # Phenol
+    ]
 
-    # model.eval()
-    # with torch.no_grad():
-    #     for smiles in new_smiles:
-    #         try:
-    #             # Convert to graph
-    #             graph_data = smiles_to_graph(smiles)
-    #             graph_data = graph_data.to(device)
+    model.eval()
+    with torch.no_grad():
+        for smiles in new_smiles:
+            try:
+                # Convert to graph
+                graph_data = smiles_to_graph(smiles)
+                graph_data = graph_data.to(device)
 
-    #             # Add batch dimension
-    #             graph_data.batch = torch.zeros(
-    #                 graph_data.x.size(0), dtype=torch.long, device=device
-    #             )
+                # Add batch dimension
+                graph_data.batch = torch.zeros(
+                    graph_data.x.size(0), dtype=torch.long, device=device
+                )
 
-    #             # Make prediction
-    #             prediction = model(graph_data)
+                # Make prediction
+                prediction = model(graph_data)
 
-    #             print(f"\nMolecule: {smiles}")
-    #             print(f"  Predicted gene expression shape: {prediction.shape}")
-    #             print(
-    #                 f"  Sample predictions (first 5 genes): {prediction[0, :5].cpu().numpy()}"
-    #             )
-    #             print(
-    #                 f"  Mean predicted change: {prediction.mean().item():.4f}"
-    #             )
-    #             print(f"  Std of predictions: {prediction.std().item():.4f}")
+                print(f"\nMolecule: {smiles}")
+                print(f"  Predicted gene expression shape: {prediction.shape}")
+                print(
+                    f"  Sample predictions (first 5 genes): {prediction[0, :5].cpu().numpy()}"
+                )
+                print(
+                    f"  Mean predicted change: {prediction.mean().item():.4f}"
+                )
+                print(f"  Std of predictions: {prediction.std().item():.4f}")
 
-    #         except Exception as e:
-    #             print(f"Error processing {smiles}: {e}")
+            except Exception as e:
+                print(f"Error processing {smiles}: {e}")
 
     # # =============================================================================
     # # 7. Model analysis
     # # =============================================================================
 
-    # print("\n7. Model analysis...")
+    print("\n7. Model analysis...")
 
-    # # Get parameter information
-    # param_info = model.get_parameter_info()
-    # print(f"Total parameters: {param_info['total_parameters']}")
-    # print(f"Trainable parameters: {param_info['trainable_parameters']}")
+    # Get parameter information
+    param_info = model.get_parameter_info()
+    print(f"Total parameters: {param_info['total_parameters']}")
+    print(f"Trainable parameters: {param_info['trainable_parameters']}")
 
-    # # Example of getting molecular embeddings (features before final prediction)
-    # with torch.no_grad():
-    #     example_graph = smiles_to_graph("CCO")  # Ethanol
-    #     example_graph = example_graph.to(device)
-    #     example_graph.batch = torch.zeros(
-    #         example_graph.x.size(0), dtype=torch.long, device=device
-    #     )
+    # Example of getting molecular embeddings (features before final prediction)
+    with torch.no_grad():
+        example_graph = smiles_to_graph("CCO")  # Ethanol
+        example_graph = example_graph.to(device)
+        example_graph.batch = torch.zeros(
+            example_graph.x.size(0), dtype=torch.long, device=device
+        )
 
-    #     embeddings = model.get_embeddings(example_graph)
-    #     print(f"Molecular embedding shape: {embeddings.shape}")
-    #     print(f"Embedding sample: {embeddings[0, :5].cpu().numpy()}")
+        embeddings = model.get_embeddings(example_graph)
+        print(f"Molecular embedding shape: {embeddings.shape}")
+        print(f"Embedding sample: {embeddings[0, :5].cpu().numpy()}")
 
-    # print("\n✅ Example completed successfully!")
-    # print("\nNext steps:")
-    # print(
-    #     "1. Replace dummy data with your actual SMILES and gene expression data"
-    # )
-    # print("2. Implement proper train/validation/test splits")
-    # print("3. Tune hyperparameters using validation performance")
-    # print("4. Add data preprocessing and augmentation")
-    # print("5. Implement cross-validation for robust evaluation")
+    print("\n✅ Example completed successfully!")
+    print("\nNext steps:")
+    print(
+        "1. Replace dummy data with your actual SMILES and gene expression data"
+    )
+    print("2. Implement proper train/validation/test splits")
+    print("3. Tune hyperparameters using validation performance")
+    print("4. Add data preprocessing and augmentation")
+    print("5. Implement cross-validation for robust evaluation")
 
 
 if __name__ == "__main__":
