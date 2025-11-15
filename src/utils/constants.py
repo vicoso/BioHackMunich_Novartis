@@ -63,9 +63,7 @@ PERMITTED_BOND_TYPES: List[Chem.rdchem.BondType] = [
 ]
 
 # Feature dimensions
-ATOM_FEATURE_DIM = (
-    len(PERMITTED_ATOMS) + 7 + 1
-)  # atoms + properties + chirality
+ATOM_FEATURE_DIM = len(PERMITTED_ATOMS) + 7 + 1  # atoms + properties + chirality
 BOND_FEATURE_DIM = (
     len(PERMITTED_BOND_TYPES) + 2 + 1
 )  # bond types + properties + stereochemistry
@@ -100,9 +98,7 @@ DEFAULT_DATA_PARAMS = {
 }
 
 # Feature dimensions
-ATOM_FEATURE_DIM = (
-    len(PERMITTED_ATOMS) + 7 + 1
-)  # atoms + properties + chirality
+ATOM_FEATURE_DIM = len(PERMITTED_ATOMS) + 7 + 1  # atoms + properties + chirality
 BOND_FEATURE_DIM = (
     len(PERMITTED_BOND_TYPES) + 2 + 1
 )  # bond types + properties + stereochemistry

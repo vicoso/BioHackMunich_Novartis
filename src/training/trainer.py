@@ -11,6 +11,11 @@ from typing import List, Tuple, Optional, Dict, Any
 from ..data.molecular_features import smiles_to_graph
 from .utils import calculate_metrics, EarlyStopping, LossTracker
 
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping as PL_EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
+
 
 def create_dataset(
     smiles_list: List[str],
@@ -45,9 +50,7 @@ def create_dataset(
             )
 
             # Add gene expression as target
-            graph_data.y = torch.tensor(gene_expr, dtype=torch.float).unsqueeze(
-                0
-            )
+            graph_data.y = torch.tensor(gene_expr, dtype=torch.float).unsqueeze(0)
 
             dataset.append(graph_data)
         except Exception as e:
@@ -256,3 +259,200 @@ def train_model(
         "best_epoch": loss_tracker.get_best_epoch(),
         "final_epoch": epoch + 1,
     }
+
+
+# -------------------------------
+# PyTorch Lightning integration
+# -------------------------------
+
+if pl is not None:
+
+    class LightningGNNModule(pl.LightningModule):  # type: ignore[misc]
+        """
+        PyTorch Lightning module wrapper around an existing GNN model.
+
+        Expects the wrapped model to accept a PyG batch and return predictions
+        matching `batch.y` shape.
+        """
+
+        def __init__(
+            self,
+            model: nn.Module,
+            criterion: nn.Module,
+            optimizer_ctor: Any,
+            optimizer_kwargs: Optional[Dict[str, Any]] = None,
+            scheduler_ctor: Optional[Any] = None,
+            scheduler_kwargs: Optional[Dict[str, Any]] = None,
+            learning_rate: Optional[float] = None,
+        ):
+            super().__init__()
+            self.model = model
+            self.criterion = criterion
+            self.optimizer_ctor = optimizer_ctor
+            self.optimizer_kwargs = optimizer_kwargs or {}
+            self.scheduler_ctor = scheduler_ctor
+            self.scheduler_kwargs = scheduler_kwargs or {}
+
+            # If LR provided directly, prefer that over kwargs
+            if learning_rate is not None:
+                self.optimizer_kwargs = {
+                    **self.optimizer_kwargs,
+                    "lr": learning_rate,
+                }
+
+        def forward(self, batch: Data):  # type: ignore[override]
+            return self.model(batch)
+
+        def training_step(self, batch: Data, batch_idx: int):  # type: ignore[override]
+            preds = self.model(batch)
+            loss = self.criterion(preds, batch.y)
+            # Log averaged over epoch (Lightning handles aggregation)
+            self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            return loss
+
+        def validation_step(self, batch: Data, batch_idx: int):  # type: ignore[override]
+            preds = self.model(batch)
+            loss = self.criterion(preds, batch.y)
+            # Defer full-metrics to epoch end; still log loss for progress bar
+            self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            return {
+                "preds": torch.as_tensor(preds).detach(),
+                "targets": torch.as_tensor(batch.y).detach(),
+            }
+
+        def validation_epoch_end(self, outputs):  # type: ignore[override]
+            # Aggregate predictions and targets for full-epoch metrics
+            if len(outputs) == 0:
+                return
+            preds = torch.cat([o["preds"].detach().cpu() for o in outputs], dim=0)
+            targets = torch.cat([o["targets"].detach().cpu() for o in outputs], dim=0)
+            metrics = calculate_metrics(preds, targets)
+            # Log a few key metrics
+            self.log("val_mae", metrics.get("mae", 0.0), prog_bar=True)
+            self.log("val_rmse", metrics.get("rmse", 0.0))
+            self.log("val_r2", metrics.get("r2", 0.0))
+
+        def configure_optimizers(self):  # type: ignore[override]
+            optimizer = self.optimizer_ctor(self.parameters(), **self.optimizer_kwargs)
+            if self.scheduler_ctor is not None:
+                scheduler = self.scheduler_ctor(optimizer, **self.scheduler_kwargs)
+                return {
+                    "optimizer": optimizer,
+                    "lr_scheduler": {
+                        "scheduler": scheduler,
+                        "monitor": "val_loss",
+                    },
+                }
+            return optimizer
+
+
+def train_with_lightning(
+    model: nn.Module,
+    train_loader: Any,
+    val_loader: Optional[Any],
+    criterion: nn.Module,
+    optimizer_ctor: Any = torch.optim.Adam,
+    optimizer_kwargs: Optional[Dict[str, Any]] = None,
+    scheduler_ctor: Optional[Any] = None,
+    scheduler_kwargs: Optional[Dict[str, Any]] = None,
+    max_epochs: int = 100,
+    patience: int = 10,
+    min_delta: float = 1e-4,
+    default_root_dir: str = "lightning_logs",
+    logger_type: str = "csv",  # "csv" or "tensorboard"
+    logger_name: str = "gnn",
+    logger_version: Optional[str] = None,
+    save_best_model: bool = True,
+    model_checkpoint_dir: Optional[str] = None,
+    accelerator: str = "auto",
+    devices: Any = "auto",
+    deterministic: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """
+    Train the provided model using PyTorch Lightning with logging, early stopping,
+    and optional checkpointing.
+
+    Returns a dictionary with trainer artifacts (log dir, best model path, etc.).
+    """
+    if pl is None:
+        raise ImportError(
+            "pytorch-lightning is not installed. Please install it to use Lightning integration."
+        )
+
+    lightning_module = LightningGNNModule(
+        model=model,
+        criterion=criterion,
+        optimizer_ctor=optimizer_ctor,
+        optimizer_kwargs=optimizer_kwargs,
+        scheduler_ctor=scheduler_ctor,
+        scheduler_kwargs=scheduler_kwargs,
+    )
+
+    # Logger
+    if logger_type.lower() == "tensorboard" and TensorBoardLogger is not None:
+        logger = TensorBoardLogger(
+            save_dir=default_root_dir, name=logger_name, version=logger_version
+        )
+    else:
+        assert CSVLogger is not None
+        logger = CSVLogger(
+            save_dir=default_root_dir, name=logger_name, version=logger_version
+        )
+
+    # Callbacks: early stopping + checkpoint
+    callbacks = []
+    assert PL_EarlyStopping is not None
+    callbacks.append(
+        PL_EarlyStopping(
+            monitor="val_loss",
+            patience=patience,
+            min_delta=min_delta,
+            mode="min",
+        )
+    )
+
+    ckpt_dir = model_checkpoint_dir or default_root_dir
+    ckpt_callback = None
+    if save_best_model and ModelCheckpoint is not None:
+        ckpt_callback = ModelCheckpoint(
+            dirpath=ckpt_dir,
+            filename=f"{logger_name}-best-{{epoch}}-{{val_loss:.4f}}",
+            save_top_k=1,
+            monitor="val_loss",
+            mode="min",
+            save_last=True,
+        )
+        callbacks.append(ckpt_callback)
+
+    trainer = pl.Trainer(
+        max_epochs=max_epochs,
+        logger=logger,
+        callbacks=callbacks,
+        default_root_dir=default_root_dir,
+        accelerator=accelerator,
+        devices=devices,
+        deterministic=deterministic,
+        enable_progress_bar=True,
+        log_every_n_steps=10,
+    )
+
+    trainer.fit(
+        lightning_module,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader,
+    )
+
+    result: Dict[str, Any] = {
+        "log_dir": (logger.log_dir if hasattr(logger, "log_dir") else default_root_dir),
+        "best_model_path": (
+            ckpt_callback.best_model_path if ckpt_callback is not None else None
+        ),
+        "best_model_score": (
+            float(ckpt_callback.best_model_score.cpu())
+            if ckpt_callback and ckpt_callback.best_model_score is not None
+            else None
+        ),
+        "finished_epochs": trainer.current_epoch,
+    }
+
+    return result

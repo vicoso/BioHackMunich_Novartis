@@ -115,9 +115,7 @@ def smiles_to_graph(
     # Get node features
     node_features = []
     for atom in mol.GetAtoms():
-        node_features.append(
-            get_atom_features(atom, use_chirality=use_chirality)
-        )
+        node_features.append(get_atom_features(atom, use_chirality=use_chirality))
 
     x = torch.tensor(node_features, dtype=torch.float)
 
@@ -129,9 +127,7 @@ def smiles_to_graph(
         i = bond.GetBeginAtomIdx()
         j = bond.GetEndAtomIdx()
 
-        bond_feat = get_bond_features(
-            bond, use_stereochemistry=use_stereochemistry
-        )
+        bond_feat = get_bond_features(bond, use_stereochemistry=use_stereochemistry)
 
         # Add both directions (undirected graph represented as bidirectional)
         edge_indices.append([i, j])
@@ -149,9 +145,7 @@ def smiles_to_graph(
         )
         edge_attr = torch.zeros((0, bond_feat_dim), dtype=torch.float)
     else:
-        edge_index = (
-            torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
-        )
+        edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
         edge_attr = torch.tensor(edge_features, dtype=torch.float)
 
     # Create PyTorch Geometric Data object

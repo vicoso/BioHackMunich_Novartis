@@ -100,9 +100,7 @@ def main():
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
     val_loader = (
-        DataLoader(val_dataset, batch_size=2, shuffle=False)
-        if val_dataset
-        else None
+        DataLoader(val_dataset, batch_size=2, shuffle=False) if val_dataset else None
     )
 
     print(
@@ -148,9 +146,7 @@ def main():
     print("\n4. Training the model...")
 
     # Initialize optimizer and loss function
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=training_config.learning_rate
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=training_config.learning_rate)
     criterion = torch.nn.MSELoss()
 
     # Train model
@@ -217,9 +213,7 @@ def main():
                     if graph_data.num_nodes is not None
                     else graph_data.x.size(0)
                 )
-                graph_data.batch = torch.zeros(
-                    n_nodes, dtype=torch.long, device=device
-                )
+                graph_data.batch = torch.zeros(n_nodes, dtype=torch.long, device=device)
 
                 # Make prediction
                 prediction = model(graph_data)
@@ -229,9 +223,7 @@ def main():
                 print(
                     f"  Sample predictions (first 5 genes): {prediction[0, :5].cpu().numpy()}"
                 )
-                print(
-                    f"  Mean predicted change: {prediction.mean().item():.4f}"
-                )
+                print(f"  Mean predicted change: {prediction.mean().item():.4f}")
                 print(f"  Std of predictions: {prediction.std().item():.4f}")
 
             except Exception as e:
@@ -257,23 +249,17 @@ def main():
             if example_graph.num_nodes is not None
             else example_graph.x.size(0)
         )
-        example_graph.batch = torch.zeros(
-            n_nodes, dtype=torch.long, device=device
-        )
+        example_graph.batch = torch.zeros(n_nodes, dtype=torch.long, device=device)
 
         # Ensure node features exist (they do for smiles_to_graph)
-        assert (
-            example_graph.x is not None
-        ), "Expected node features 'x' to be present"
+        assert example_graph.x is not None, "Expected node features 'x' to be present"
         embeddings = model.get_embeddings(example_graph)
         print(f"Molecular embedding shape: {embeddings.shape}")
         print(f"Embedding sample: {embeddings[0, :5].cpu().numpy()}")
 
     print("\n✅ Example completed successfully!")
     print("\nNext steps:")
-    print(
-        "1. Replace dummy data with your actual SMILES and gene expression data"
-    )
+    print("1. Replace dummy data with your actual SMILES and gene expression data")
     print("2. Implement proper train/validation/test splits")
     print("3. Tune hyperparameters using validation performance")
     print("4. Add data preprocessing and augmentation")

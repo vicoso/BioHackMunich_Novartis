@@ -26,9 +26,7 @@ class GNNConfig:
                 f"Pooling method must be 'mean' or 'add', got {self.pooling}"
             )
         if self.dropout < 0 or self.dropout > 1:
-            raise ValueError(
-                f"Dropout must be between 0 and 1, got {self.dropout}"
-            )
+            raise ValueError(f"Dropout must be between 0 and 1, got {self.dropout}")
         if self.num_conv_layers < 1:
             raise ValueError(
                 f"Number of conv layers must be >= 1, got {self.num_conv_layers}"
@@ -51,15 +49,11 @@ class TrainingConfig:
     def __post_init__(self):
         """Validate training configuration."""
         if self.learning_rate <= 0:
-            raise ValueError(
-                f"Learning rate must be > 0, got {self.learning_rate}"
-            )
+            raise ValueError(f"Learning rate must be > 0, got {self.learning_rate}")
         if self.batch_size < 1:
             raise ValueError(f"Batch size must be >= 1, got {self.batch_size}")
         if self.num_epochs < 1:
-            raise ValueError(
-                f"Number of epochs must be >= 1, got {self.num_epochs}"
-            )
+            raise ValueError(f"Number of epochs must be >= 1, got {self.num_epochs}")
 
 
 @dataclass
@@ -83,8 +77,7 @@ class DataConfig:
                 f"Train/val/test splits must sum to 1.0, got {total_split}"
             )
         if any(
-            split < 0
-            for split in [self.train_split, self.val_split, self.test_split]
+            split < 0 for split in [self.train_split, self.val_split, self.test_split]
         ):
             raise ValueError("All splits must be non-negative")
 
@@ -102,6 +95,4 @@ class ExperimentConfig:
     @classmethod
     def default(cls) -> "ExperimentConfig":
         """Create default experiment configuration."""
-        return cls(
-            model=GNNConfig(), training=TrainingConfig(), data=DataConfig()
-        )
+        return cls(model=GNNConfig(), training=TrainingConfig(), data=DataConfig())

@@ -54,9 +54,7 @@ def calculate_metrics(
     return metrics
 
 
-def pearson_correlation(
-    predictions: torch.Tensor, targets: torch.Tensor
-) -> float:
+def pearson_correlation(predictions: torch.Tensor, targets: torch.Tensor) -> float:
     """
     Calculate Pearson correlation coefficient between predictions and targets.
 
