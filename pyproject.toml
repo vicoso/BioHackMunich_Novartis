@@ -23,4 +23,5 @@ dependencies = [
     "torchmetrics>=1.0.0",
     "wandb>=0.17.0",
     "black>=25.11.0",
+    "requests>=2.31.0",
 ]
