@@ -19,6 +19,8 @@ import argparse
 from typing import Optional, Dict, Any
 
 import torch
+import pandas as pd
+import numpy as np
 import wandb
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
@@ -37,7 +39,46 @@ from src.config.cls import (
 )
 from src.models.gnn import MolecularGCN
 from src.training.lightning import LightningWrapper
-from src.main import create_dataset_from_csv, create_dataloaders
+from src.main import create_dataloaders
+from src.data.molecular_features import create_dataset
+from src.data.geometric_features import add_forman_ricci_curvature_features
+from src.utils.constants import PERMITTED_ATOMS, BOND_FEATURE_DIM
+
+
+def filter_nan_columns_and_align(
+    smiles_df: pd.DataFrame, targets_df: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Filter out columns with NaN values from targets and align both dataframes by shared indices.
+
+    Args:
+        smiles_df: DataFrame with SMILES and molecular features
+        targets_df: DataFrame with gene expression targets
+
+    Returns:
+        Tuple of (aligned_smiles_df, filtered_targets_df)
+    """
+    # Align dataframes to same length first (take minimum length)
+    n_samples = min(len(smiles_df), len(targets_df))
+    smiles_df = smiles_df.iloc[:n_samples].copy()
+    targets_df = targets_df.iloc[:n_samples].copy()
+
+    # Find columns in targets_df that contain any NaN values
+    nan_columns = targets_df.columns[targets_df.isna().any()]
+    clean_columns = targets_df.columns[~targets_df.isna().any()]
+
+    # Filter out columns with NaNs
+    filtered_targets = targets_df[clean_columns].copy()
+
+    print(f"\n=== Column-wise NaN Filtering ===")
+    print(f"Original samples: {n_samples}")
+    print(f"Original target columns (genes): {len(targets_df.columns)}")
+    print(f"Columns with NaN values: {len(nan_columns)}")
+    print(f"Clean columns retained: {len(clean_columns)}")
+    if len(nan_columns) > 0:
+        print(f"First few NaN columns: {list(nan_columns[:5])}")
+
+    return smiles_df, filtered_targets
 
 
 def _str2bool(v):
@@ -206,7 +247,88 @@ def main():
     exp = build_experiment_config(merged)
 
     # === Dataset ===
-    graph_data = create_dataset_from_csv()
+    # Build dataset from CSV and respect data flags from `exp.data`
+    data_dir = "data"
+    smiles_file = os.path.join(data_dir, "ALL_HEK293T_X.csv")
+    targets_file = os.path.join(data_dir, "ALL_HEK293T_Y.csv")
+
+    if not os.path.exists(smiles_file):
+        raise FileNotFoundError(f"SMILES file not found: {smiles_file}")
+    if not os.path.exists(targets_file):
+        raise FileNotFoundError(f"Targets file not found: {targets_file}")
+
+    smiles_df = pd.read_csv(smiles_file)
+    print(
+        f"Loaded X with {len(smiles_df)} rows and columns {list(smiles_df.columns)}"
+    )
+
+    targets_df = pd.read_csv(targets_file)
+    print(f"Loaded targets with shape: {targets_df.shape}")
+
+    # Filter out columns (genes) with NaN values and align dataframes
+    smiles_df, targets_df = filter_nan_columns_and_align(
+        smiles_df[:200], targets_df[:200]
+    )
+    n_samples = len(smiles_df)  # Both dataframes now have same length
+
+    if "smiles" not in smiles_df.columns:
+        raise ValueError("Expected column 'smiles' in X CSV")
+    smiles_list = smiles_df.loc[: n_samples - 1, "smiles"].astype(str).tolist()
+
+    if (
+        "pert_idose" not in smiles_df.columns
+        or "seq_platform" not in smiles_df.columns
+    ):
+        raise ValueError(
+            "Expected columns 'pert_idose' and 'seq_platform' in X CSV"
+        )
+
+    pert_vals = smiles_df.loc[: n_samples - 1, "pert_idose"].to_numpy(
+        dtype=np.float32
+    )
+    platform_raw = smiles_df.loc[: n_samples - 1, "seq_platform"]
+    from pandas.api.types import is_numeric_dtype
+
+    if is_numeric_dtype(platform_raw):
+        platform_vals = platform_raw.to_numpy(dtype=np.float32)
+        uniq = np.unique(platform_vals)
+        if len(uniq) > 2:
+            raise ValueError(
+                f"seq_platform expected binary, got unique values: {uniq}"
+            )
+        if not np.all(np.isin(uniq, [0.0, 1.0])) and len(uniq) == 2:
+            minv, maxv = np.min(platform_vals), np.max(platform_vals)
+            platform_vals = (platform_vals > minv).astype(np.float32)
+    else:
+        labels, _ = pd.factorize(platform_raw.astype(str), sort=True)
+        if len(np.unique(labels)) > 2:
+            raise ValueError(
+                f"seq_platform expected binary categories, got: {np.unique(labels)}"
+            )
+        platform_vals = labels.astype(np.float32)
+
+    mol_feat_matrix = np.stack([pert_vals, platform_vals], axis=1)
+    molecular_features_list = [row for row in mol_feat_matrix]
+
+    targets_matrix = targets_df.iloc[:n_samples].to_numpy(dtype=np.float32)
+    gene_expression_list = [row for row in targets_matrix]
+
+    graph_data = create_dataset(
+        smiles_list=smiles_list,
+        molecular_features=molecular_features_list,
+        gene_expression_list=gene_expression_list,
+        use_chirality=bool(exp.data.use_chirality),
+        use_stereochemistry=bool(exp.data.use_stereochemistry),
+        add_explicit_hydrogens=bool(exp.data.add_explicit_hydrogens),
+    )
+
+    print(f"Successfully created dataset with {len(graph_data)} graphs")
+
+    # Add Forman-Ricci curvature features to edges
+    print("Adding Forman-Ricci curvature features...")
+    graph_data = add_forman_ricci_curvature_features(graph_data)
+    print(f"Successfully added curvature features to {len(graph_data)} graphs")
+
     if len(graph_data) == 0:
         raise ValueError("No valid graphs created from dataset")
 
@@ -224,6 +346,25 @@ def main():
         exp.model.context_dim = int(graph_data[0].mol_features.shape[-1])
     else:
         exp.model.context_dim = 0
+
+    # Set edge_feature_dim dynamically from dataset (if edge_attr present)
+    if (
+        hasattr(graph_data[0], "edge_attr")
+        and graph_data[0].edge_attr is not None
+    ):
+        exp.model.edge_feature_dim = int(graph_data[0].edge_attr.shape[-1])
+        print(
+            f"Using edge features with dimension: {exp.model.edge_feature_dim}"
+        )
+    else:
+        exp.model.edge_feature_dim = 0
+        print("No edge features detected")
+
+    # Ensure model's expected node_feature_dim matches dataset creation flags
+    # node features = one-hot atom types + 7 numeric properties (+1 chirality if used)
+    exp.model.node_feature_dim = (
+        len(PERMITTED_ATOMS) + 7 + (1 if exp.data.use_chirality else 0)
+    )
 
     # === Dataloaders ===
     train_loader, val_loader, test_loader = create_dataloaders(
