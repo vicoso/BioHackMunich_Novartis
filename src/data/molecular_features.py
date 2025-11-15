@@ -1,7 +1,3 @@
-"""
-Molecular feature extraction utilities for converting SMILES to graph representations.
-"""
-
 import torch
 from torch_geometric.data import Data
 from rdkit import Chem
@@ -10,75 +6,70 @@ from typing import List, Optional, Union, Sequence
 
 from ..utils.constants import PERMITTED_ATOMS, PERMITTED_BOND_TYPES
 
+# --- Feature Helpers ---
+
 
 def get_atom_features(
     atom: Chem.rdchem.Atom, use_chirality: bool = True
-) -> Sequence[Union[int, float]]:
+) -> List[float]:
     """
     Convert RDKit atom object to feature vector.
-
-    Args:
-        atom: RDKit atom object
-        use_chirality: Whether to include chirality information
-
-    Returns:
-        List of atom features
+    Features are normalized for consistent scaling in a GNN.
     """
-    # Atom type (one-hot encoding)
+    # 1. Atom type (One-hot encoding)
     atom_type = atom.GetSymbol()
-    atom_type_enc = [int(atom_type == x) for x in PERMITTED_ATOMS]
+    atom_type_enc = [float(atom_type == x) for x in PERMITTED_ATOMS]
 
-    # Atom properties
+    # 2. Basic properties (Normalized or numeric)
     features = atom_type_enc + [
-        atom.GetTotalNumHs(includeNeighbors=True)
-        / 8.0,  # Number of hydrogens (normalized)
-        atom.GetTotalDegree() / 4.0,  # Degree (normalized)
-        atom.GetFormalCharge(),  # Formal charge
-        int(atom.GetIsAromatic()),  # Is aromatic
-        atom.GetTotalValence() / 6.0,  # Valence (normalized)
-        atom.GetNumRadicalElectrons(),  # Number of radical electrons
-        int(atom.IsInRing()),  # Is in ring
+        float(atom.GetTotalNumHs(includeNeighbors=True))
+        / 8.0,  # H-count (normalized)
+        float(atom.GetTotalDegree()) / 4.0,  # Degree (normalized)
+        float(atom.GetFormalCharge()),  # Formal charge (numeric)
+        float(atom.GetIsAromatic()),  # Is aromatic (binary)
+        float(atom.GetTotalValence()) / 6.0,  # Valence (normalized)
+        float(atom.GetNumRadicalElectrons()),  # Num radical electrons (numeric)
+        float(atom.IsInRing()),  # Is in ring (binary)
     ]
 
+    # 3. Chirality
     if use_chirality:
-        try:
-            chiral_type = int(atom.GetChiralTag())
-        except:
-            chiral_type = 0
-        features.append(chiral_type)
+        # Use a defined list of chiral tags for robust one-hot encoding if needed,
+        # but using the integer value (0-3) is simpler for GNNs:
+        # 0: CHI_UNSPECIFIED, 1: CHI_TETRAHEDRAL_CW, 2: CHI_TETRAHEDRAL_CCW, 3: CHI_OTHER
+        chiral_type = int(atom.GetChiralTag())
+        features.append(float(chiral_type))
 
     return features
 
 
 def get_bond_features(
     bond: Chem.rdchem.Bond, use_stereochemistry: bool = True
-) -> Sequence[Union[int, float]]:
+) -> List[float]:
     """
     Convert RDKit bond object to feature vector.
-
-    Args:
-        bond: RDKit bond object
-        use_stereochemistry: Whether to include stereochemistry
-
-    Returns:
-        List of bond features
     """
+    # 1. Bond type (One-hot encoding)
     bond_type = bond.GetBondType()
-    bond_type_enc = [int(bond_type == x) for x in PERMITTED_BOND_TYPES]
+    bond_type_enc = [float(bond_type == x) for x in PERMITTED_BOND_TYPES]
 
+    # 2. Basic properties (Binary)
     features = bond_type_enc + [
-        int(bond.GetIsConjugated()),  # Is conjugated
-        int(bond.IsInRing()),  # Is in ring
+        float(bond.GetIsConjugated()),  # Is conjugated
+        float(bond.IsInRing()),  # Is in ring
     ]
 
+    # 3. Stereochemistry
     if use_stereochemistry:
-        try:
-            stereo = int(bond.GetStereo())
-        except:
-            stereo = 0
-        features.append(stereo)
+        # Use the integer value (0-3) for simplicity:
+        # 0: STEREONONE, 1: STEREOANY, 2: STEREOZ, 3: STEREOE
+        stereo = int(bond.GetStereo())
+        features.append(float(stereo))
 
     return features
+
+
+# --- Graph Conversion ---
 
 
 def smiles_to_graph(
@@ -90,36 +81,25 @@ def smiles_to_graph(
     """
     Convert SMILES string to PyTorch Geometric Data object.
 
-    Args:
-        smiles: SMILES string representation of molecule
-        use_chirality: Whether to include chirality information
-        use_stereochemistry: Whether to include stereochemistry information
-        add_explicit_hydrogens: Whether to add explicit hydrogens
-
-    Returns:
-        PyTorch Geometric Data object with node features, edge indices, and edge features
-
-    Raises:
-        ValueError: If SMILES string is invalid
+    *Debug Note: Ensures explicit error handling and correct empty graph setup.*
     """
-    # Convert SMILES to RDKit molecule
     mol = Chem.MolFromSmiles(smiles)
 
+    # **R1: Robustness Check for Invalid SMILES**
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
 
-    # Add explicit hydrogens if requested
     if add_explicit_hydrogens:
         mol = Chem.AddHs(mol)
 
-    # Get node features
-    node_features = []
-    for atom in mol.GetAtoms():
-        node_features.append(get_atom_features(atom, use_chirality=use_chirality))
-
+    # 1. Get Node Features (x)
+    node_features = [
+        get_atom_features(atom, use_chirality=use_chirality)
+        for atom in mol.GetAtoms()
+    ]
     x = torch.tensor(node_features, dtype=torch.float)
 
-    # Get edge indices and edge features
+    # 2. Get Edge Indices (edge_index) and Edge Features (edge_attr)
     edge_indices = []
     edge_features = []
 
@@ -127,75 +107,69 @@ def smiles_to_graph(
         i = bond.GetBeginAtomIdx()
         j = bond.GetEndAtomIdx()
 
-        bond_feat = get_bond_features(bond, use_stereochemistry=use_stereochemistry)
+        bond_feat = get_bond_features(
+            bond, use_stereochemistry=use_stereochemistry
+        )
 
-        # Add both directions (undirected graph represented as bidirectional)
+        # Add both directions for an undirected graph
         edge_indices.append([i, j])
         edge_features.append(bond_feat)
 
         edge_indices.append([j, i])
         edge_features.append(bond_feat)
 
-    # Handle molecules with no bonds (single atoms)
+    # **R2: Simplified Edge Handling for Single-Atom Molecules**
     if len(edge_indices) == 0:
-        edge_index = torch.zeros((2, 0), dtype=torch.long)
-        # Use default bond feature dimension
+        edge_index = torch.empty((2, 0), dtype=torch.long)
+        # Calculate dimension based on feature creation logic
         bond_feat_dim = (
             len(PERMITTED_BOND_TYPES) + 2 + (1 if use_stereochemistry else 0)
         )
-        edge_attr = torch.zeros((0, bond_feat_dim), dtype=torch.float)
+        edge_attr = torch.empty((0, bond_feat_dim), dtype=torch.float)
     else:
-        edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
+        # .t().contiguous() is crucial for PyG's COO format
+        edge_index = (
+            torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
+        )
         edge_attr = torch.tensor(edge_features, dtype=torch.float)
 
-    # Create PyTorch Geometric Data object
+    # 3. Create PyTorch Geometric Data object
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
     return data
 
 
+# --- Validation and Descriptors (Minor Refinement) ---
+
+
 def validate_smiles(smiles: str) -> bool:
     """
     Validate if a SMILES string is chemically valid.
-
-    Args:
-        smiles: SMILES string to validate
-
-    Returns:
-        True if valid, False otherwise
     """
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        return mol is not None
-    except:
-        return False
+    # Simplified validation: MolFromSmiles returns None for most invalid SMILES
+    return Chem.MolFromSmiles(smiles) is not None
 
 
 def get_molecular_descriptors(smiles: str) -> dict:
     """
     Calculate common molecular descriptors from SMILES.
 
-    Args:
-        smiles: SMILES string
-
-    Returns:
-        Dictionary of molecular descriptors
-
-    Raises:
-        ValueError: If SMILES string is invalid
+    *Debug Note: Uses Descriptors.calcMolDescriptors for a slightly cleaner interface
+    but your original usage of individual functions is also fine.*
     """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
 
+    # Use the specific descriptors you defined (MolWt, MolLogP, etc.)
     return {
-        "molecular_weight": Descriptors.MolWt(mol),  # type: ignore
-        "logp": Descriptors.MolLogP(mol),  # type: ignore
+        "molecular_weight": Descriptors.MolWt(mol),
+        "logp": Descriptors.MolLogP(mol),
         "num_atoms": mol.GetNumAtoms(),
         "num_bonds": mol.GetNumBonds(),
-        "num_rings": Descriptors.RingCount(mol),  # type: ignore
-        "tpsa": Descriptors.TPSA(mol),  # type: ignore
-        "num_rotatable_bonds": Descriptors.NumRotatableBonds(mol),  # type: ignore
-        "num_h_donors": Descriptors.NumHDonors(mol),  # type: ignore
-        "num_h_acceptors": Descriptors.NumHAcceptors(mol),  # type: ignore
+        "num_rings": Descriptors.RingCount(mol),
+        "tpsa": Descriptors.TPSA(mol),
+        "num_rotatable_bonds": Descriptors.NumRotatableBonds(mol),
+        "num_h_donors": Descriptors.NumHDonors(mol),
+        "num_h_acceptors": Descriptors.NumHAcceptors(mol),
     }

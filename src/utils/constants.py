@@ -63,11 +63,25 @@ PERMITTED_BOND_TYPES: List[Chem.rdchem.BondType] = [
 ]
 
 # Feature dimensions
-ATOM_FEATURE_DIM = len(PERMITTED_ATOMS) + 7 + 1  # atoms + properties + chirality
+ATOM_FEATURE_DIM = (
+    len(PERMITTED_ATOMS) + 7 + 1
+)  # atoms + properties + chirality
 BOND_FEATURE_DIM = (
     len(PERMITTED_BOND_TYPES) + 2 + 1
 )  # bond types + properties + stereochemistry
 
+CHIRALITY_TAGS = [
+    Chem.rdchem.ChiralType.CHI_UNSPECIFIED,
+    Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CW,
+    Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CCW,
+    Chem.rdchem.ChiralType.CHI_OTHER,
+]
+BOND_STEREO_TAGS = [
+    Chem.rdchem.BondStereo.STEREONONE,
+    Chem.rdchem.BondStereo.STEREOANY,
+    Chem.rdchem.BondStereo.STEREOZ,
+    Chem.rdchem.BondStereo.STEREOE,
+]
 
 # Default model parameters
 # Use computed ATOM_FEATURE_DIM to avoid drift from feature definition
@@ -98,7 +112,9 @@ DEFAULT_DATA_PARAMS = {
 }
 
 # Feature dimensions
-ATOM_FEATURE_DIM = len(PERMITTED_ATOMS) + 7 + 1  # atoms + properties + chirality
+ATOM_FEATURE_DIM = (
+    len(PERMITTED_ATOMS) + 7 + 1
+)  # atoms + properties + chirality
 BOND_FEATURE_DIM = (
     len(PERMITTED_BOND_TYPES) + 2 + 1
 )  # bond types + properties + stereochemistry
