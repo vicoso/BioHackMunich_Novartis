@@ -10,6 +10,8 @@ This example demonstrates how to:
 """
 
 import torch
+import time
+import os
 import numpy as np
 from torch_geometric.loader import DataLoader
 import pandas as pd
@@ -149,6 +151,9 @@ def main():
     )
     criterion = torch.nn.MSELoss()
 
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    model_save_path = f"models/model_{timestamp}.pt"
+    
     # Train model
     training_history = train_model(
         model=model,
@@ -160,9 +165,11 @@ def main():
         num_epochs=training_config.num_epochs,
         patience=training_config.patience,
         save_best_model=True,
-        model_save_path="best_model.pth",
+        model_save_path=model_save_path,
         verbose=True,
     )
+        
+        
 
     print(f"Training completed at epoch {training_history['final_epoch']}")
     print(
