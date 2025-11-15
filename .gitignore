@@ -1,6 +1,7 @@
 # Custom
 uv.lock
 data/
+models/
 notebooks/
 !src/data/
 
