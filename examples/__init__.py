@@ -1,3 +1,0 @@
-"""
-Example usage and demonstrations.
-"""
