@@ -87,6 +87,7 @@ class DataConfig:
     use_chirality: bool = True
     use_stereochemistry: bool = True
     add_explicit_hydrogens: bool = False
+    use_geometric_features: bool = True
     normalize_features: bool = True
     train_split: float = 0.8
     val_split: float = 0.1

@@ -166,6 +166,15 @@ def parse_args() -> argparse.Namespace:
         const=True,
         default=False,
     )
+    p.add_argument(
+        "--use-geometric-features",
+        type=_str2bool,
+        nargs="?",
+        const=True,
+        default=True,
+        help="Add Forman-Ricci curvature geometric features to edges",
+    )
+    p.add_argument("--no-geometric-features", action="store_true")
 
     return p.parse_args()
 
@@ -183,6 +192,8 @@ def merge_wandb_config(args: argparse.Namespace) -> Dict[str, Any]:
         base["use_chirality"] = False
     if base.get("no_stereochemistry"):
         base["use_stereochemistry"] = False
+    if base.get("no_geometric_features"):
+        base["use_geometric_features"] = False
     return base
 
 
@@ -225,6 +236,9 @@ def build_experiment_config(cfg: Dict[str, Any]) -> ExperimentConfig:
     )
     exp.data.add_explicit_hydrogens = bool(
         cfg.get("add_explicit_hydrogens", exp.data.add_explicit_hydrogens)
+    )
+    exp.data.use_geometric_features = bool(
+        cfg.get("use_geometric_features", exp.data.use_geometric_features)
     )
 
     return exp
@@ -324,10 +338,15 @@ def main():
 
     print(f"Successfully created dataset with {len(graph_data)} graphs")
 
-    # Add Forman-Ricci curvature features to edges
-    print("Adding Forman-Ricci curvature features...")
-    graph_data = add_forman_ricci_curvature_features(graph_data)
-    print(f"Successfully added curvature features to {len(graph_data)} graphs")
+    # Conditionally add Forman-Ricci curvature features to edges
+    if exp.data.use_geometric_features:
+        print("Adding Forman-Ricci curvature features...")
+        graph_data = add_forman_ricci_curvature_features(graph_data)
+        print(
+            f"Successfully added curvature features to {len(graph_data)} graphs"
+        )
+    else:
+        print("Skipping geometric features (disabled)")
 
     if len(graph_data) == 0:
         raise ValueError("No valid graphs created from dataset")

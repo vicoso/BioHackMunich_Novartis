@@ -54,6 +54,8 @@ parameters:
     values: [false]
   add-explicit-hydrogens:
     values: [false, true]
+  use-geometric-features:
+    values: [false, true]
 
 # Optional early termination to speed up sweeps
 early_terminate:
