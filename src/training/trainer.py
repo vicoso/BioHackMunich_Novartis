@@ -96,10 +96,6 @@ def train_one_epoch(
         # Forward pass
         pred = model(batch)
 
-        # One-line debug for the first batch each epoch
-        if batch_idx == 0:
-            print(f"Debug shapes -> pred: {pred.shape}, y: {batch.y.shape}")
-
         # Compute loss (both should be [B, G])
         loss = criterion(pred, batch.y)
 
