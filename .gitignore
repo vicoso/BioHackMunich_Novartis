@@ -4,6 +4,9 @@ data/
 models/
 notebooks/
 !src/data/
+!src/models/
+outputs/
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

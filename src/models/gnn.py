@@ -37,6 +37,8 @@ class MolecularGCN(BaseModel):
         self.num_genes = config.num_genes
         self.dropout_rate = config.dropout
         self.pooling = config.pooling
+        # Context (per-graph) feature dimension to concatenate post-pooling
+        self.context_dim = getattr(config, "context_dim", 0)
 
         # Graph convolution layers
         self.convs = nn.ModuleList()
@@ -51,8 +53,11 @@ class MolecularGCN(BaseModel):
             self.convs.append(GCNConv(self.hidden_dim, self.hidden_dim))
             self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
 
-        # MLP for prediction after pooling
-        self.fc1 = nn.Linear(self.hidden_dim, self.hidden_dim * 2)
+        # MLP for prediction after pooling (+ optional context features)
+        mlp_input_dim = self.hidden_dim + (
+            self.context_dim if self.context_dim else 0
+        )
+        self.fc1 = nn.Linear(mlp_input_dim, self.hidden_dim * 2)
         self.fc2 = nn.Linear(self.hidden_dim * 2, self.hidden_dim)
         self.fc3 = nn.Linear(self.hidden_dim, self.num_genes)
 
@@ -85,6 +90,22 @@ class MolecularGCN(BaseModel):
             x = global_add_pool(x, batch)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
+
+        # Concatenate optional per-graph context features if present
+        if (
+            self.context_dim
+            and hasattr(data, "mol_features")
+            and data.mol_features is not None
+        ):
+            ctx = data.mol_features
+            if ctx.dim() == 1:
+                ctx = ctx.view(-1, self.context_dim)
+            if ctx.size(1) != self.context_dim:
+                raise ValueError(
+                    f"mol_features width {ctx.size(1)} != context_dim {self.context_dim}"
+                )
+            ctx = ctx.to(x.dtype)
+            x = torch.cat([x, ctx], dim=1)
 
         # MLP for final prediction
         x = F.relu(self.fc1(x))
@@ -121,6 +142,22 @@ class MolecularGCN(BaseModel):
             x = global_add_pool(x, batch)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
+
+        # Concatenate optional per-graph context features if present
+        if (
+            self.context_dim
+            and hasattr(data, "mol_features")
+            and data.mol_features is not None
+        ):
+            ctx = data.mol_features
+            if ctx.dim() == 1:
+                ctx = ctx.view(-1, self.context_dim)
+            if ctx.size(1) != self.context_dim:
+                raise ValueError(
+                    f"mol_features width {ctx.size(1)} != context_dim {self.context_dim}"
+                )
+            ctx = ctx.to(x.dtype)
+            x = torch.cat([x, ctx], dim=1)
 
         # Apply first two MLP layers
         x = F.relu(self.fc1(x))
