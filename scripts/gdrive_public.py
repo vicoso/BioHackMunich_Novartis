@@ -114,19 +114,74 @@ def download_drive_file(file_id: str, out_dir: str) -> None:
     session = requests.Session()
     try:
         print(f"-> File: {file_id}")
-        response = session.get(base_url, timeout=60)
-        # Handle confirmation token for large files
-        confirm_token = None
-        for key, val in response.cookies.items():
-            if key.startswith("download_warning"):
-                confirm_token = val
-                break
-        if confirm_token:
-            response = session.get(
-                base_url + f"&confirm={confirm_token}", timeout=60
+        response = session.get(base_url, timeout=60, stream=True)
+
+        # If Google shows an HTML confirmation (large files), try to extract
+        # the confirm token either from cookies or from the HTML body and
+        # re-request with the token.
+        def parse_confirm_flow(resp):
+            # 1) cookie-based token
+            for key, val in resp.cookies.items():
+                if key.startswith("download_warning"):
+                    return (None, {"confirm": val})
+            # 2) try to parse the HTML form action + hidden inputs
+            try:
+                text = resp.text
+            except Exception:
+                return (None, None)
+
+            # Look for a form with hidden inputs (action + inputs)
+            form_m = re.search(
+                r"<form[^>]+action=\"([^\"]+)\"[^>]*>(.*?)</form>", text, re.S
             )
+            if form_m:
+                action = form_m.group(1)
+                form_body = form_m.group(2)
+                inputs = dict(
+                    re.findall(
+                        r"<input[^>]+name=\"([^\"]+)\"[^>]+value=\"([^\"]*)\"",
+                        form_body,
+                    )
+                )
+                return (action, inputs)
+
+            # 3) fallback: look for confirm token in text
+            m = re.search(
+                r"name=\"?confirm\"?\s+value=\"?([0-9A-Za-z_\-]+)\"?", text
+            )
+            if m:
+                return (None, {"confirm": m.group(1)})
+            m2 = re.search(r"confirm=([0-9A-Za-z_\-]+)", text)
+            if m2:
+                return (None, {"confirm": m2.group(1)})
+            return (None, None)
+
+            action_url, params = parse_confirm_flow(response)
+            if params or action_url:
+                response.close()
+                if action_url:
+                    # Build the download URL from action and params
+                    try:
+                        from urllib.parse import urlencode
+
+                        qs = urlencode(params)
+                        download_url = action_url
+                        if "?" in download_url:
+                            download_url += "&" + qs
+                        else:
+                            download_url += "?" + qs
+                    except Exception:
+                        download_url = base_url
+                else:
+                    # fallback to uc endpoint with confirm token
+                    download_url = base_url
+                    if params and "confirm" in params:
+                        download_url += f"&confirm={params['confirm']}"
+
+                response = session.get(download_url, timeout=60, stream=True)
 
         response.raise_for_status()
+
         # Attempt to derive filename from headers
         cd = response.headers.get("Content-Disposition", "")
         name_match = re.search(r'filename="?([^";]+)"?', cd)
@@ -135,8 +190,12 @@ def download_drive_file(file_id: str, out_dir: str) -> None:
         else:
             filename = f"{file_id}.bin"
         out_path = os.path.join(out_dir, filename)
+
+        # Stream to file to avoid loading whole file in memory
         with open(out_path, "wb") as f:
-            f.write(response.content)
+            for chunk in response.iter_content(chunk_size=32768):
+                if chunk:
+                    f.write(chunk)
     except Exception as e:
         print(f"!!! File download failed for {file_id}: {e}")
 
