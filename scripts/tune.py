@@ -281,7 +281,7 @@ def main():
 
     # Filter out columns (genes) with NaN values and align dataframes
     smiles_df, targets_df = filter_nan_columns_and_align(
-        smiles_df[:200], targets_df[:200]
+        smiles_df, targets_df
     )
     n_samples = len(smiles_df)  # Both dataframes now have same length
 
