@@ -2,6 +2,7 @@ import torch
 from torch_geometric.data import Data
 from rdkit import Chem
 from rdkit.Chem import Descriptors
+from rdkit.Chem.rdmolops import GetMolFrags
 from typing import List, Optional, Union, Sequence
 
 from ..utils.constants import PERMITTED_ATOMS, PERMITTED_BOND_TYPES
@@ -88,6 +89,17 @@ def smiles_to_graph(
     # **R1: Robustness Check for Invalid SMILES**
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
+
+    # **CRITICAL FIX:** Extract only the largest fragment (desalting/desolventing)
+    fragments = GetMolFrags(mol, asMols=True)
+    if fragments:
+        # Find the fragment with the most atoms (typically the main drug molecule)
+        largest_mol = max(fragments, key=lambda m: m.GetNumAtoms())
+        mol = largest_mol
+
+    # Add explicit hydrogens if requested
+    if add_explicit_hydrogens:
+        mol = Chem.AddHs(mol)
 
     if add_explicit_hydrogens:
         mol = Chem.AddHs(mol)
