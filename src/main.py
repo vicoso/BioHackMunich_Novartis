@@ -29,9 +29,9 @@ def create_dataset_from_csv() -> List[Data]:
         List of PyTorch Geometric Data objects
     """
     # Load the data files
-    data_dir = "data"
-    smiles_file = os.path.join(data_dir, "MCE_4000_X.csv")
-    targets_file = os.path.join(data_dir, "MCE_4000_Y.csv")
+    data_dir = "/Users/hornung_comp1"
+    smiles_file = os.path.join(data_dir, "ALL_HEK293T_X.csv")
+    targets_file = os.path.join(data_dir, "ALL_HEK293T_Y.csv")
 
     if not os.path.exists(smiles_file):
         raise FileNotFoundError(f"SMILES file not found: {smiles_file}")
@@ -39,7 +39,8 @@ def create_dataset_from_csv() -> List[Data]:
         raise FileNotFoundError(f"Targets file not found: {targets_file}")
 
     # Load X (SMILES + molecular features: pert_idose, seq_platform)
-    smiles_df = pd.read_csv(smiles_file)[:200]
+    #smiles_df = pd.read_csv(smiles_file)[:200]
+    smiles_df = pd.read_csv(smiles_file)
     print(
         f"Loaded X with {len(smiles_df)} rows and columns {list(smiles_df.columns)}"
     )
@@ -112,6 +113,20 @@ def create_dataset_from_csv() -> List[Data]:
 
     return graph_data
 
+from sklearn.model_selection import train_test_split
+import numpy as np
+from torch_geometric.loader import DataLoader
+from typing import List, Tuple, Any
+from torch_geometric.data import Data
+
+
+def print_platform_stats(name, indices, platform_labels):
+    """Helper to print class distribution."""
+    labels = platform_labels[indices]
+    unique, counts = np.unique(labels, return_counts=True)
+    dist = {int(u): int(c) for u, c in zip(unique, counts)}
+    print(f"{name} distribution:", dist)
+
 
 def create_dataloaders(
     graph_data: List[Data],
@@ -119,44 +134,75 @@ def create_dataloaders(
     training_config: TrainingConfig,
 ) -> Tuple[Any, Any, Any]:
     """
-    Split dataset and create DataLoaders.
-
-    Returns:
-        Tuple of (train_loader, val_loader, test_loader)
+    Split dataset and create DataLoaders, with stratification by seq_platform.
     """
-    # Split indices
+
     n_samples = len(graph_data)
     indices = np.arange(n_samples)
 
-    # First split: separate test set
+    # -------------------------------------------------
+    # 1) Extract platform labels from graph_data
+    # -------------------------------------------------
+    platform_labels = []
+    for i, d in enumerate(graph_data):
+        if not hasattr(d, "mol_features") or d.mol_features is None:
+            raise ValueError(f"Sample {i} has no mol_features; cannot stratify.")
+        if d.mol_features.shape[-1] < 2:
+            raise ValueError(f"Sample {i} mol_features shape invalid: {d.mol_features.shape}")
+
+        seq_pl = float(d.mol_features[1])   # column 1 is seq_platform
+        platform_labels.append(int(seq_pl))
+
+    platform_labels = np.array(platform_labels, dtype=int)
+
+    # Print initial distribution
+    print("\n=== Platform Distribution (before split) ===")
+    print_platform_stats("All samples", indices, platform_labels)
+
+    # -------------------------------------------------
+    # 2) First split: train+val vs test (stratified)
+    # -------------------------------------------------
     train_val_indices, test_indices = train_test_split(
         indices,
         test_size=data_config.test_split,
         random_state=data_config.random_seed,
         shuffle=True,
+        stratify=platform_labels,
     )
 
-    # Second split: separate train and validation
-    val_size = data_config.val_split / (
-        data_config.train_split + data_config.val_split
-    )
+    print("\n=== After First Split ===")
+    print_platform_stats("Train+Val", train_val_indices, platform_labels)
+    print_platform_stats("Test", test_indices, platform_labels)
+
+    # -------------------------------------------------
+    # 3) Second split: train vs val (stratified)
+    # -------------------------------------------------
+    val_fraction = data_config.val_split / (data_config.train_split + data_config.val_split)
+    platform_labels_train_val = platform_labels[train_val_indices]
+
     train_indices, val_indices = train_test_split(
         train_val_indices,
-        test_size=val_size,
+        test_size=val_fraction,
         random_state=data_config.random_seed,
         shuffle=True,
+        stratify=platform_labels_train_val,
     )
 
-    print(
-        f"Dataset splits - Train: {len(train_indices)}, Val: {len(val_indices)}, Test: {len(test_indices)}"
-    )
+    print("\n=== After Train/Val Split ===")
+    print_platform_stats("Train", train_indices, platform_labels)
+    print_platform_stats("Val", val_indices, platform_labels)
+    print_platform_stats("Test (unchanged)", test_indices, platform_labels)
 
-    # Create datasets
+    # -------------------------------------------------
+    # 4) Create datasets
+    # -------------------------------------------------
     train_data = [graph_data[i] for i in train_indices]
-    val_data = [graph_data[i] for i in val_indices]
-    test_data = [graph_data[i] for i in test_indices]
+    val_data   = [graph_data[i] for i in val_indices]
+    test_data  = [graph_data[i] for i in test_indices]
 
-    # Create DataLoaders
+    # -------------------------------------------------
+    # 5) Create DataLoaders
+    # -------------------------------------------------
     train_loader = DataLoader(
         train_data,
         batch_size=training_config.batch_size,
@@ -177,6 +223,8 @@ def create_dataloaders(
     )
 
     return train_loader, val_loader, test_loader
+
+ 
 
 
 def main():
