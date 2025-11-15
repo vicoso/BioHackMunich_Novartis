@@ -82,7 +82,6 @@ def smiles_to_graph(
     """
     Convert SMILES string to PyTorch Geometric Data object.
 
-    *Debug Note: Ensures explicit error handling and correct empty graph setup.*
     """
     mol = Chem.MolFromSmiles(smiles)
 
