@@ -55,7 +55,15 @@ def main():
     with open("./data/y.pkl","rb") as g:
         gene_expression_list = pickle.load(g)
 
-    num_genes = len(gene_expression_list)
+    # Debug: Inspect data structure
+    print(f"Debug: gene_expression_list type: {type(gene_expression_list)}")
+    print(f"Debug: gene_expression_list length: {len(gene_expression_list)}")
+    if gene_expression_list:
+        print(f"Debug: First sample type: {type(gene_expression_list[0])}")
+        print(f"Debug: First sample shape: {gene_expression_list[0].shape}")
+        print(f"Debug: Number of genes per sample: {len(gene_expression_list[0])}")
+
+    num_genes = len(gene_expression_list[0]) if gene_expression_list else 0
 
     print(
         f"Loaded {len(smiles_list)} molecules with {num_genes} gene expression values each"

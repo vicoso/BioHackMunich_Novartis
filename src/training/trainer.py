@@ -50,9 +50,7 @@ def create_dataset(
             )
 
             # Add gene expression as target
-            graph_data.y = torch.tensor(gene_expr, dtype=torch.float).unsqueeze(
-                0
-            )
+            graph_data.y = torch.tensor(gene_expr, dtype=torch.float)
 
             dataset.append(graph_data)
         except Exception as e:
