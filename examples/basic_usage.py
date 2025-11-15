@@ -44,7 +44,7 @@ def main():
 
     # Example SMILES strings (replace with your actual data)
     with open("./data/X.pkl","rb") as f:
-        smiles_list = pickle.load(f)
+        smiles_list = [str(x) for x in pickle.load(f)]
 
 
     # Generate dummy gene expression data (978 genes for L1000)
@@ -104,7 +104,7 @@ def main():
     model_config = GNNConfig(
         node_feature_dim=ATOM_FEATURE_DIM,  # Align with actual atom feature size
         hidden_dim=64,  # Smaller for this example
-        num_conv_layers=2,  # Fewer layers for faster training
+        num_conv_layers=4,  # Fewer layers for faster training
         num_genes=num_genes,
         dropout=0.2,
         pooling="mean",
@@ -171,86 +171,7 @@ def main():
         for metric, value in val_metrics.items():
             print(f"  {metric}: {value:.4f}")
 
-    # # =============================================================================
-    # # 6. Make predictions on new molecules
-    # # =============================================================================
-
-    print("\n6. Making predictions on new molecules...")
-
-    # Example new molecules for prediction
-    new_smiles = [
-        "CC(C)O",  # Isopropanol
-        "C1=CC=C(C=C1)O",  # Phenol
-    ]
-
-    model.eval()
-    with torch.no_grad():
-        for smiles in new_smiles:
-            try:
-                # Convert to graph
-                graph_data = smiles_to_graph(smiles)
-                graph_data = graph_data.to(device)
-
-                # Add batch dimension
-                assert (
-                    graph_data.x is not None
-                ), "Expected node features 'x' to be present"
-                n_nodes = (
-                    graph_data.num_nodes
-                    if graph_data.num_nodes is not None
-                    else graph_data.x.size(0)
-                )
-                graph_data.batch = torch.zeros(n_nodes, dtype=torch.long, device=device)
-
-                # Make prediction
-                prediction = model(graph_data)
-
-                print(f"\nMolecule: {smiles}")
-                print(f"  Predicted gene expression shape: {prediction.shape}")
-                print(
-                    f"  Sample predictions (first 5 genes): {prediction[0, :5].cpu().numpy()}"
-                )
-                print(f"  Mean predicted change: {prediction.mean().item():.4f}")
-                print(f"  Std of predictions: {prediction.std().item():.4f}")
-
-            except Exception as e:
-                print(f"Error processing {smiles}: {e}")
-
-    # # =============================================================================
-    # # 7. Model analysis
-    # # =============================================================================
-
-    print("\n7. Model analysis...")
-
-    # Get parameter information
-    param_info = model.get_parameter_info()
-    print(f"Total parameters: {param_info['total_parameters']}")
-    print(f"Trainable parameters: {param_info['trainable_parameters']}")
-
-    # Example of getting molecular embeddings (features before final prediction)
-    with torch.no_grad():
-        example_graph = smiles_to_graph("CCO")  # Ethanol
-        example_graph = example_graph.to(device)
-        n_nodes = (
-            example_graph.num_nodes
-            if example_graph.num_nodes is not None
-            else example_graph.x.size(0)
-        )
-        example_graph.batch = torch.zeros(n_nodes, dtype=torch.long, device=device)
-
-        # Ensure node features exist (they do for smiles_to_graph)
-        assert example_graph.x is not None, "Expected node features 'x' to be present"
-        embeddings = model.get_embeddings(example_graph)
-        print(f"Molecular embedding shape: {embeddings.shape}")
-        print(f"Embedding sample: {embeddings[0, :5].cpu().numpy()}")
-
-    print("\n✅ Example completed successfully!")
-    print("\nNext steps:")
-    print("1. Replace dummy data with your actual SMILES and gene expression data")
-    print("2. Implement proper train/validation/test splits")
-    print("3. Tune hyperparameters using validation performance")
-    print("4. Add data preprocessing and augmentation")
-    print("5. Implement cross-validation for robust evaluation")
+    
 
 
 if __name__ == "__main__":
