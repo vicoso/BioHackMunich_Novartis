@@ -5,6 +5,7 @@ Constants and default parameters for molecular GNN models.
 from typing import List
 from rdkit import Chem
 
+
 # Permitted atoms for molecular feature extraction
 PERMITTED_ATOMS: List[str] = [
     "C",
@@ -52,6 +53,7 @@ PERMITTED_ATOMS: List[str] = [
     "Pb",
 ]
 
+
 # Permitted bond types for molecular feature extraction
 PERMITTED_BOND_TYPES: List[Chem.rdchem.BondType] = [
     Chem.rdchem.BondType.SINGLE,
@@ -59,6 +61,15 @@ PERMITTED_BOND_TYPES: List[Chem.rdchem.BondType] = [
     Chem.rdchem.BondType.TRIPLE,
     Chem.rdchem.BondType.AROMATIC,
 ]
+
+# Feature dimensions
+ATOM_FEATURE_DIM = (
+    len(PERMITTED_ATOMS) + 7 + 1
+)  # atoms + properties + chirality
+BOND_FEATURE_DIM = (
+    len(PERMITTED_BOND_TYPES) + 2 + 1
+)  # bond types + properties + stereochemistry
+
 
 # Default model parameters
 # Use computed ATOM_FEATURE_DIM to avoid drift from feature definition
