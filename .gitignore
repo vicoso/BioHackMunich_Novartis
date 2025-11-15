@@ -10,6 +10,7 @@ logs/
 wandb/
 lightning_logs/
 credentials.json
+images
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

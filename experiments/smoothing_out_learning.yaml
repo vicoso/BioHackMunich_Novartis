@@ -1,0 +1,63 @@
+name: molecular_gcn_bayes
+project: gnn_gene_expression
+method: bayes
+
+# Optimize the validation loss logged by Lightning as "val_loss"
+metric:
+  name: val_loss
+  goal: minimize
+
+# Entrypoint for the sweep runs
+program: scripts/tune.py
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - --wandb-run-name
+  - sweep-${count}
+  - ${args}
+
+parameters:
+  # Training
+  learning-rate:
+    distribution: log_uniform
+    min: 1e-5
+    max: 3e-3
+  batch-size:
+    values: [32, 64]
+  num-epochs:
+    values: [15]
+  patience:
+    values: [5, 8, 10, 12]
+  min-delta:
+    values: [0.0001, 0.0005, 0.001]
+  # Model (GNN)
+  hidden-dim:
+    values: [64, 128, 256]
+  num-conv-layers:
+    values: [3]
+  dropout:
+    distribution: uniform
+    min: 0.2
+    max: 0.5
+  pooling:
+    values: [add]
+  activation:
+    values: [leaky_relu]
+  use-batch-norm:
+    values: [true]
+
+  # Data
+  use-chirality:
+    values: [false]
+  use-stereochemistry:
+    values: [false]
+  add-explicit-hydrogens:
+    values: [false]
+  use-geometric-features:
+    values: [true]
+
+# Optional early termination to speed up sweeps
+early_terminate:
+  type: hyperband
+  min_iter: 5
