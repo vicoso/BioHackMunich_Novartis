@@ -108,6 +108,26 @@ class LightningWrapper(pl.LightningModule):
         # Forward pass through model
         y_pred = self.backbone(batch).float()
 
+        # --- Runtime sanity checks: detect NaN / Inf early and surface informative errors
+        def _check(name, tensor):
+            if tensor is None:
+                return
+            if torch.isnan(tensor).any():
+                raise ValueError(
+                    f"NaN detected in {name} (batch_idx={batch_idx}, shape={tuple(tensor.shape)})"
+                )
+            if torch.isinf(tensor).any():
+                raise ValueError(
+                    f"Inf detected in {name} (batch_idx={batch_idx}, shape={tuple(tensor.shape)})"
+                )
+
+        # Check common tensors that can cause NaN propagation
+        _check("y", y)
+        _check("y_pred", y_pred)
+        _check("batch.x", getattr(batch, "x", None))
+        _check("batch.edge_attr", getattr(batch, "edge_attr", None))
+        _check("batch.mol_features", getattr(batch, "mol_features", None))
+
         # Handle batched data: y should be [batch_size, num_genes], y_pred is [batch_size, num_genes]
         # If y is flattened from batching, reshape it
         if y.dim() == 1 and y_pred.dim() == 2:
