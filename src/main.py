@@ -18,7 +18,45 @@ from typing import List, Tuple, Any
 from .models.gnn import MolecularGCN
 from .config.cls import GNNConfig, TrainingConfig, DataConfig, ExperimentConfig
 from .data.molecular_features import create_dataset
+from .data.geometric_features import add_forman_ricci_curvature_features
 from .training.lightning import LightningWrapper
+from .utils.constants import BOND_FEATURE_DIM
+
+
+def filter_nan_columns_and_align(
+    smiles_df: pd.DataFrame, targets_df: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Filter out columns with NaN values from targets and align both dataframes by shared indices.
+
+    Args:
+        smiles_df: DataFrame with SMILES and molecular features
+        targets_df: DataFrame with gene expression targets
+
+    Returns:
+        Tuple of (aligned_smiles_df, filtered_targets_df)
+    """
+    # Align dataframes to same length first (take minimum length)
+    n_samples = min(len(smiles_df), len(targets_df))
+    smiles_df = smiles_df.iloc[:n_samples].copy()
+    targets_df = targets_df.iloc[:n_samples].copy()
+
+    # Find columns in targets_df that contain any NaN values
+    nan_columns = targets_df.columns[targets_df.isna().any()]
+    clean_columns = targets_df.columns[~targets_df.isna().any()]
+
+    # Filter out columns with NaNs
+    filtered_targets = targets_df[clean_columns].copy()
+
+    print(f"\n=== Column-wise NaN Filtering ===")
+    print(f"Original samples: {n_samples}")
+    print(f"Original target columns (genes): {len(targets_df.columns)}")
+    print(f"Columns with NaN values: {len(nan_columns)}")
+    print(f"Clean columns retained: {len(clean_columns)}")
+    if len(nan_columns) > 0:
+        print(f"First few NaN columns: {list(nan_columns[:5])}")
+
+    return smiles_df, filtered_targets
 
 
 def create_dataset_from_csv() -> List[Data]:
@@ -48,8 +86,11 @@ def create_dataset_from_csv() -> List[Data]:
     targets_df = pd.read_csv(targets_file)
     print(f"Loaded targets with shape: {targets_df.shape}")
 
-    # Determine counts and align rows across files
-    n_samples = min(len(smiles_df), len(targets_df))
+    # Filter out columns (genes) with NaN values and align dataframes
+    smiles_df, targets_df = filter_nan_columns_and_align(
+        smiles_df[:200], targets_df[:200]
+    )
+    n_samples = len(smiles_df)  # Both dataframes now have same length
 
     # Extract SMILES list (column 'smiles')
     if "smiles" not in smiles_df.columns:
@@ -109,6 +150,11 @@ def create_dataset_from_csv() -> List[Data]:
     )
 
     print(f"Successfully created dataset with {len(graph_data)} graphs")
+
+    # Add Forman-Ricci curvature features to edges
+    print("Adding Forman-Ricci curvature features...")
+    graph_data = add_forman_ricci_curvature_features(graph_data)
+    print(f"Successfully added curvature features to {len(graph_data)} graphs")
 
     return graph_data
 
@@ -233,7 +279,8 @@ def main():
     # Override some defaults for this example
     config.training.num_epochs = 20
     config.training.batch_size = 16
-    config.training.learning_rate = 0.001
+    # Use a lower default learning rate to improve numerical stability
+    config.training.learning_rate = 1e-4
 
     print("Configuration:")
     print(f"  Model: {config.model}")
@@ -284,6 +331,19 @@ def main():
         config.model.context_dim = int(graph_data[0].mol_features.shape[-1])
     else:
         config.model.context_dim = 0
+
+    # Set edge_feature_dim dynamically from dataset (if edge_attr present)
+    if (
+        hasattr(graph_data[0], "edge_attr")
+        and graph_data[0].edge_attr is not None
+    ):
+        config.model.edge_feature_dim = int(graph_data[0].edge_attr.shape[-1])
+        print(
+            f"Using edge features with dimension: {config.model.edge_feature_dim}"
+        )
+    else:
+        config.model.edge_feature_dim = 0
+        print("No edge features detected")
     model = MolecularGCN(config.model)
     print(
         f"Model created with {sum(p.numel() for p in model.parameters())} parameters"
@@ -354,6 +414,8 @@ def main():
         callbacks=callbacks,
         accelerator="auto",
         devices="auto",
+        # Clip gradients to prevent exploding gradients / NaNs
+        gradient_clip_val=1.0,
         log_every_n_steps=10,
         check_val_every_n_epoch=1,
         enable_progress_bar=True,

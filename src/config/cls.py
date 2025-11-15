@@ -24,6 +24,8 @@ class GNNConfig:
     use_batch_norm: bool = True
     # Number of per-graph context features concatenated before MLP (e.g., dose, platform)
     context_dim: int = 0
+    # Number of edge features (bond features + curvature)
+    edge_feature_dim: int = 0
 
     def __post_init__(self):
         """Validate configuration parameters."""
