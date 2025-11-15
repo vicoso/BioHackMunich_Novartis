@@ -23,6 +23,8 @@ urls=(
 	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=TCM_Compounds_MDA_MB_231_10_MetaData.xlsx"
 	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=TCM_Compounds_MDA_MB_231_20_Counts.xlsx"
 	"https://cigs.iomicscloud.com/cigs/cigs_doc.php?url=TCM_Compounds_MDA_MB_231_20_MetaData.xlsx"
+	"https://drive.google.com/drive/folders/1XHN0S8HLibjncIJQyZ-qQ7PxT-LoRWts"
+	"https://drive.google.com/drive/folders/1XHN0S8HLibjncIJQyZ-qQ7PxT-LoRWts"
 )
 
 download_file() {
