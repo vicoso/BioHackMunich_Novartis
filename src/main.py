@@ -39,7 +39,7 @@ def create_dataset_from_csv() -> List[Data]:
         raise FileNotFoundError(f"Targets file not found: {targets_file}")
 
     # Load X (SMILES + molecular features: pert_idose, seq_platform)
-    smiles_df = pd.read_csv(smiles_file)[:200]
+    smiles_df = pd.read_csv(smiles_file)
     print(
         f"Loaded X with {len(smiles_df)} rows and columns {list(smiles_df.columns)}"
     )
@@ -186,7 +186,7 @@ def main():
     config = ExperimentConfig.default()
 
     # Override some defaults for this example
-    config.training.num_epochs = 20
+    config.training.num_epochs = 10
     config.training.batch_size = 16
     config.training.learning_rate = 0.001
 

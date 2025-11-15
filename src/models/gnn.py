@@ -1,11 +1,29 @@
 """
 Graph Neural Network models for molecular property prediction.
+
+`MolecularGCN` applies stacked GCNConv layers with configurable activation and
+optional BatchNorm, aggregates node features to graph-level via global pooling
+("mean", "add", or "max"), then predicts with an MLP.
+
+Context features (`data.mol_features`) handling:
+- If `context_dim > 0` and a sample provides `mol_features` (shape `[context_dim]`
+    or `[B, context_dim]`), these are concatenated to the pooled graph embedding
+    prior to the MLP, enabling conditioning on per-graph metadata (e.g., dose, platform).
+
+Embeddings:
+- `get_embeddings(data)` returns graph-level embeddings after pooling and the first
+    two MLP layers (thus including any concatenated `mol_features`).
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, global_mean_pool, global_add_pool
+from torch_geometric.nn import (
+    GCNConv,
+    global_mean_pool,
+    global_add_pool,
+    global_max_pool,
+)
 from typing import Union
 
 from .base import BaseModel
@@ -37,21 +55,25 @@ class MolecularGCN(BaseModel):
         self.num_genes = config.num_genes
         self.dropout_rate = config.dropout
         self.pooling = config.pooling
+        self.activation_name = getattr(config, "activation", "relu").lower()
+        self.use_batch_norm = getattr(config, "use_batch_norm", True)
         # Context (per-graph) feature dimension to concatenate post-pooling
         self.context_dim = getattr(config, "context_dim", 0)
 
         # Graph convolution layers
         self.convs = nn.ModuleList()
-        self.batch_norms = nn.ModuleList()
+        self.batch_norms = nn.ModuleList() if self.use_batch_norm else None
 
         # First layer
         self.convs.append(GCNConv(self.node_feature_dim, self.hidden_dim))
-        self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
+        if self.use_batch_norm:
+            self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
 
         # Hidden layers
         for _ in range(self.num_conv_layers - 1):
             self.convs.append(GCNConv(self.hidden_dim, self.hidden_dim))
-            self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
+            if self.use_batch_norm:
+                self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
 
         # MLP for prediction after pooling (+ optional context features)
         mlp_input_dim = self.hidden_dim + (
@@ -62,6 +84,25 @@ class MolecularGCN(BaseModel):
         self.fc3 = nn.Linear(self.hidden_dim, self.num_genes)
 
         self.dropout = nn.Dropout(self.dropout_rate)
+
+        # Activation function
+        self._act = self._resolve_activation(self.activation_name)
+
+    @staticmethod
+    def _resolve_activation(name: str):
+        name = (name or "relu").lower()
+        if name == "relu":
+            return F.relu
+        if name == "gelu":
+            return F.gelu
+        if name == "elu":
+            return F.elu
+        if name == "leaky_relu":
+            return F.leaky_relu
+        if name == "tanh":
+            return torch.tanh
+        # default fallback
+        return F.relu
 
     def forward(self, data) -> torch.Tensor:
         """
@@ -76,11 +117,12 @@ class MolecularGCN(BaseModel):
         """
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
-        # Graph convolution layers with ReLU and batch norm
+        # Graph convolution layers with activation and optional batch norm
         for i in range(self.num_conv_layers):
             x = self.convs[i](x, edge_index)
-            x = self.batch_norms[i](x)
-            x = F.relu(x)
+            if self.use_batch_norm:
+                x = self.batch_norms[i](x)
+            x = self._act(x)
             x = self.dropout(x)
 
         # Global pooling (aggregate node features to graph-level)
@@ -88,6 +130,8 @@ class MolecularGCN(BaseModel):
             x = global_mean_pool(x, batch)
         elif self.pooling == "add":
             x = global_add_pool(x, batch)
+        elif self.pooling == "max":
+            x = global_max_pool(x, batch)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
 
@@ -108,9 +152,9 @@ class MolecularGCN(BaseModel):
             x = torch.cat([x, ctx], dim=1)
 
         # MLP for final prediction
-        x = F.relu(self.fc1(x))
+        x = self._act(self.fc1(x))
         x = self.dropout(x)
-        x = F.relu(self.fc2(x))
+        x = self._act(self.fc2(x))
         x = self.dropout(x)
         x = self.fc3(x)
 
@@ -131,8 +175,9 @@ class MolecularGCN(BaseModel):
         # Graph convolution layers
         for i in range(self.num_conv_layers):
             x = self.convs[i](x, edge_index)
-            x = self.batch_norms[i](x)
-            x = F.relu(x)
+            if self.use_batch_norm:
+                x = self.batch_norms[i](x)
+            x = self._act(x)
             x = self.dropout(x)
 
         # Global pooling
@@ -140,6 +185,8 @@ class MolecularGCN(BaseModel):
             x = global_mean_pool(x, batch)
         elif self.pooling == "add":
             x = global_add_pool(x, batch)
+        elif self.pooling == "max":
+            x = global_max_pool(x, batch)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
 
@@ -160,8 +207,8 @@ class MolecularGCN(BaseModel):
             x = torch.cat([x, ctx], dim=1)
 
         # Apply first two MLP layers
-        x = F.relu(self.fc1(x))
+        x = self._act(self.fc1(x))
         x = self.dropout(x)
-        x = F.relu(self.fc2(x))
+        x = self._act(self.fc2(x))
 
         return x

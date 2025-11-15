@@ -17,15 +17,19 @@ class GNNConfig:
     num_conv_layers: int = 3
     num_genes: int = 978
     dropout: float = 0.2
-    pooling: str = "mean"
+    pooling: str = "add"
+    # Nonlinearity used after GCN/linear layers
+    activation: str = "relu"
+    # Whether to apply BatchNorm1d after graph conv layers
+    use_batch_norm: bool = True
     # Number of per-graph context features concatenated before MLP (e.g., dose, platform)
     context_dim: int = 0
 
     def __post_init__(self):
         """Validate configuration parameters."""
-        if self.pooling not in ["mean", "add"]:
+        if self.pooling not in ["mean", "add", "max"]:
             raise ValueError(
-                f"Pooling method must be 'mean' or 'add', got {self.pooling}"
+                f"Pooling method must be 'mean', 'add', or 'max', got {self.pooling}"
             )
         if self.dropout < 0 or self.dropout > 1:
             raise ValueError(
@@ -34,6 +38,16 @@ class GNNConfig:
         if self.num_conv_layers < 1:
             raise ValueError(
                 f"Number of conv layers must be >= 1, got {self.num_conv_layers}"
+            )
+        if self.activation.lower() not in {
+            "relu",
+            "gelu",
+            "elu",
+            "leaky_relu",
+            "tanh",
+        }:
+            raise ValueError(
+                f"Unsupported activation: {self.activation}. Choose from 'relu','gelu','elu','leaky_relu','tanh'"
             )
 
 
