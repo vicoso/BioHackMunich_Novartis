@@ -43,24 +43,16 @@ def main():
     print("\n1. Preparing example molecular data...")
 
     # Example SMILES strings (replace with your actual data)
-    with open("./data/X.pkl","rb") as f:
+    with open("./data/X.pkl", "rb") as f:
         smiles_list = [str(x) for x in pickle.load(f)]
-
 
     # Generate dummy gene expression data (978 genes for L1000)
     # In practice, replace this with your actual gene expression data
     num_samples = len(smiles_list)
 
     # Create realistic-looking gene expression changes
-    with open("./data/y.pkl","rb") as g:
+    with open("./data/y.pkl", "rb") as g:
         gene_expression_list = pickle.load(g)
-
-    # Debug: Inspect data structure
-    print(f"Debug: gene_expression_list type: {type(gene_expression_list)}")
-    print(f"Debug: gene_expression_list length: {len(gene_expression_list)}")
-    print(f"Debug: First sample type: {type(gene_expression_list[0])}")
-    print(f"Debug: First sample shape: {gene_expression_list[0].shape}")
-    print(f"Debug: Number of genes per sample: {len(gene_expression_list[0])}")
 
     num_genes = len(gene_expression_list[0])
 
@@ -94,7 +86,9 @@ def main():
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
     val_loader = (
-        DataLoader(val_dataset, batch_size=2, shuffle=False) if val_dataset else None
+        DataLoader(val_dataset, batch_size=2, shuffle=False)
+        if val_dataset
+        else None
     )
 
     print(
@@ -140,7 +134,9 @@ def main():
     print("\n4. Training the model...")
 
     # Initialize optimizer and loss function
-    optimizer = torch.optim.Adam(model.parameters(), lr=training_config.learning_rate)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=training_config.learning_rate
+    )
     criterion = torch.nn.MSELoss()
 
     # Train model
@@ -177,8 +173,6 @@ def main():
         print("Validation Metrics:")
         for metric, value in val_metrics.items():
             print(f"  {metric}: {value:.4f}")
-
-    
 
 
 if __name__ == "__main__":
