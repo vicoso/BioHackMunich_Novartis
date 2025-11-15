@@ -20,6 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import (
     GCNConv,
+    GINEConv,
     global_mean_pool,
     global_add_pool,
     global_max_pool,
@@ -59,19 +60,52 @@ class MolecularGCN(BaseModel):
         self.use_batch_norm = getattr(config, "use_batch_norm", True)
         # Context (per-graph) feature dimension to concatenate post-pooling
         self.context_dim = getattr(config, "context_dim", 0)
+        # Edge feature dimension (bond features + curvature)
+        self.edge_feature_dim = getattr(config, "edge_feature_dim", 0)
+        self.use_edge_features = self.edge_feature_dim > 0
 
         # Graph convolution layers
         self.convs = nn.ModuleList()
-        self.batch_norms = nn.ModuleList() if self.use_batch_norm else None
+        self.batch_norms = nn.ModuleList()
 
-        # First layer
-        self.convs.append(GCNConv(self.node_feature_dim, self.hidden_dim))
+        # Edge feature processing (if available)
+        if self.use_edge_features:
+            self.edge_encoder = nn.Sequential(
+                nn.Linear(self.edge_feature_dim, self.hidden_dim),
+                nn.ReLU(),
+                nn.Linear(self.hidden_dim, self.hidden_dim),
+            )
+
+        # First layer - use GINEConv if edge features available, else GCNConv
+        if self.use_edge_features:
+            # MLP for node update in GINE
+            first_mlp = nn.Sequential(
+                nn.Linear(self.node_feature_dim, self.hidden_dim),
+                nn.ReLU(),
+                nn.Linear(self.hidden_dim, self.hidden_dim),
+            )
+            self.convs.append(GINEConv(first_mlp, edge_dim=self.hidden_dim))
+        else:
+            self.convs.append(GCNConv(self.node_feature_dim, self.hidden_dim))
+
         if self.use_batch_norm:
             self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
 
         # Hidden layers
         for _ in range(self.num_conv_layers - 1):
-            self.convs.append(GCNConv(self.hidden_dim, self.hidden_dim))
+            if self.use_edge_features:
+                # MLP for node update in GINE
+                hidden_mlp = nn.Sequential(
+                    nn.Linear(self.hidden_dim, self.hidden_dim),
+                    nn.ReLU(),
+                    nn.Linear(self.hidden_dim, self.hidden_dim),
+                )
+                self.convs.append(
+                    GINEConv(hidden_mlp, edge_dim=self.hidden_dim)
+                )
+            else:
+                self.convs.append(GCNConv(self.hidden_dim, self.hidden_dim))
+
             if self.use_batch_norm:
                 self.batch_norms.append(nn.BatchNorm1d(self.hidden_dim))
 
@@ -117,9 +151,21 @@ class MolecularGCN(BaseModel):
         """
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
+        # Process edge features if available
+        edge_attr = None
+        if (
+            self.use_edge_features
+            and hasattr(data, "edge_attr")
+            and data.edge_attr is not None
+        ):
+            edge_attr = self.edge_encoder(data.edge_attr)
+
         # Graph convolution layers with activation and optional batch norm
         for i in range(self.num_conv_layers):
-            x = self.convs[i](x, edge_index)
+            if self.use_edge_features and edge_attr is not None:
+                x = self.convs[i](x, edge_index, edge_attr)
+            else:
+                x = self.convs[i](x, edge_index)
             if self.use_batch_norm:
                 x = self.batch_norms[i](x)
             x = self._act(x)
@@ -172,9 +218,21 @@ class MolecularGCN(BaseModel):
         """
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
+        # Process edge features if available
+        edge_attr = None
+        if (
+            self.use_edge_features
+            and hasattr(data, "edge_attr")
+            and data.edge_attr is not None
+        ):
+            edge_attr = self.edge_encoder(data.edge_attr)
+
         # Graph convolution layers
         for i in range(self.num_conv_layers):
-            x = self.convs[i](x, edge_index)
+            if self.use_edge_features and edge_attr is not None:
+                x = self.convs[i](x, edge_index, edge_attr)
+            else:
+                x = self.convs[i](x, edge_index)
             if self.use_batch_norm:
                 x = self.batch_norms[i](x)
             x = self._act(x)
