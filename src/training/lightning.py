@@ -139,6 +139,23 @@ class LightningWrapper(pl.LightningModule):
         # Calculate loss
         loss = self.loss_fn(y_pred, y)
 
+        # Optionally add L2 weight decay from the backbone during training
+        l2_penalty = torch.tensor(0.0, device=loss.device)
+        if prefix == "train":
+            l2_fn = getattr(self.backbone, "l2_regularization", None)
+            if callable(l2_fn):
+                l2_penalty = l2_fn()
+            if not torch.is_tensor(l2_penalty):
+                l2_penalty = torch.tensor(l2_penalty, device=loss.device)
+            loss = loss + l2_penalty
+            self.log(
+                "train_l2_penalty",
+                l2_penalty,
+                on_step=False,
+                on_epoch=True,
+                batch_size=batch.num_graphs,
+            )
+
         # Update metrics
         mae_metric(y_pred, y)
         rmse_metric(y_pred, y)

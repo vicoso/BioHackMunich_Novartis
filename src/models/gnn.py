@@ -63,6 +63,12 @@ class MolecularGCN(BaseModel):
         # Edge feature dimension (bond features + curvature)
         self.edge_feature_dim = getattr(config, "edge_feature_dim", 0)
         self.use_edge_features = self.edge_feature_dim > 0
+        # L2 decay coefficient applied to trainable weights (excludes biases/norm params)
+        self.weight_decay = float(getattr(config, "weight_decay", 0.0))
+        if self.weight_decay < 0:
+            raise ValueError(
+                f"weight_decay must be >= 0, got {self.weight_decay}"
+            )
 
         # Graph convolution layers
         self.convs = nn.ModuleList()
@@ -205,6 +211,23 @@ class MolecularGCN(BaseModel):
         x = self.fc3(x)
 
         return x
+
+    def l2_regularization(self) -> torch.Tensor:
+        """Return L2 penalty scaled by weight_decay for regularizing training."""
+        if self.weight_decay <= 0:
+            return torch.tensor(0.0, device=self.fc1.weight.device)
+
+        penalty = torch.tensor(0.0, device=self.fc1.weight.device)
+
+        for param in self.parameters():
+            if not param.requires_grad:
+                continue
+            # Skip biases and affine norm parameters (1-D tensors)
+            if param.dim() <= 1:
+                continue
+            penalty = penalty + torch.sum(param.pow(2))
+
+        return self.weight_decay * penalty
 
     def get_embeddings(self, data) -> torch.Tensor:
         """
